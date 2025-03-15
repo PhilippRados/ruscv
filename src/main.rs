@@ -1,4 +1,6 @@
 use std::fmt;
+use std::fs::File;
+use std::io::Read;
 
 const MEMSIZE: usize = 1024;
 const INSTSIZE_BYTES: usize = 4;
@@ -18,8 +20,8 @@ enum Inst {
 impl Inst {
     fn execute(self, cpu: &mut Cpu) {
         match self {
-            Inst::ADD(rd, rs1, rs2) => cpu.regs[rd] = cpu.regs[rs1] + cpu.regs[rs2],
-            Inst::ADDI(rd, rs1, imm) => cpu.regs[rd] = cpu.regs[rs1] + imm,
+            Inst::ADD(rd, rs1, rs2) => cpu.regs[rd] = cpu.regs[rs1].wrapping_add(cpu.regs[rs2]),
+            Inst::ADDI(rd, rs1, imm) => cpu.regs[rd] = cpu.regs[rs1].wrapping_add(imm),
         }
     }
 }
@@ -66,7 +68,7 @@ impl Cpu {
         }
 
         // return instruction in little-endian
-        Ok(u32::from_be_bytes(self.mem[pc..pc + 4].try_into().unwrap()))
+        Ok(u32::from_le_bytes(self.mem[pc..pc + 4].try_into().unwrap()))
     }
 
     // parses raw byte instruction into correct format
@@ -163,13 +165,21 @@ fn run(mut cpu: Cpu, program: Vec<u8>) -> Result<(), Error> {
     Ok(())
 }
 
+fn read_bin() -> Vec<u8> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        panic!("Usage: ruscv <filename>");
+    }
+    let mut file = File::open(&args[1]).expect("valid binary input file");
+    let mut program = Vec::new();
+    file.read_to_end(&mut program).expect("can read binary");
+
+    program
+}
+
 fn main() {
+    let program = read_bin();
     let cpu = Cpu::new();
-    let program = vec![
-        0x00, 0x50, 0x0e, 0x93, // addi x29, x0, 5
-        0x02, 0x50, 0x0f, 0x13, // addi x30, x0, 37
-        0x01, 0xdf, 0x0f, 0xb3, // add x31, x30, x29
-    ];
     match run(cpu, program) {
         Ok(_) => (),
         Err(e) => eprint!("{e}"),
