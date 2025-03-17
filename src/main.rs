@@ -5,23 +5,86 @@ use std::io::Read;
 const MEMSIZE: usize = 1024;
 const INSTSIZE_BYTES: usize = 4;
 
-type FUNCT3 = usize;
-type FUNCT7 = usize;
-type RS1 = usize;
-type RS2 = usize;
-type RD = usize;
-type IMM12 = u32;
+struct RFormat {
+    rd: usize,
+    funct3: usize,
+    rs1: usize,
+    rs2: usize,
+    funct7: usize,
+}
+impl RFormat {
+    fn new(raw_inst: u32) -> Self {
+        let rd = get_bits(raw_inst, 7, 11);
+        let funct3 = get_bits(raw_inst, 12, 14);
+        let rs1 = get_bits(raw_inst, 15, 19);
+        let rs2 = get_bits(raw_inst, 20, 24);
+        let funct7 = get_bits(raw_inst, 25, 31);
+
+        RFormat {
+            rd,
+            funct3,
+            rs1,
+            funct7,
+            rs2,
+        }
+    }
+}
+
+impl fmt::Display for RFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "invalid R-format instruction: funct3: '{:b}', funct7: '{:b}'",
+            self.funct3, self.funct7
+        )
+    }
+}
+
+struct IFormat {
+    rd: usize,
+    funct3: usize,
+    rs1: usize,
+    imm12: u32,
+}
+impl IFormat {
+    fn new(raw_inst: u32) -> Self {
+        let rd = get_bits(raw_inst, 7, 11);
+        let funct3 = get_bits(raw_inst, 12, 14);
+        let rs1 = get_bits(raw_inst, 15, 19);
+        let imm12 = get_bits(raw_inst, 20, 31) as u32;
+
+        IFormat {
+            rd,
+            funct3,
+            rs1,
+            imm12,
+        }
+    }
+}
+impl fmt::Display for IFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "invalid I-format instruction: funct3: '{:b}'",
+            self.funct3
+        )
+    }
+}
 
 enum Inst {
-    ADD(RD, RS1, RS2),
-    ADDI(RD, RS1, IMM12),
+    ADD(RFormat),
+    ADDI(IFormat),
 }
 
 impl Inst {
     fn execute(self, cpu: &mut Cpu) {
         match self {
-            Inst::ADD(rd, rs1, rs2) => cpu.regs[rd] = cpu.regs[rs1].wrapping_add(cpu.regs[rs2]),
-            Inst::ADDI(rd, rs1, imm) => cpu.regs[rd] = cpu.regs[rs1].wrapping_add(imm),
+            Inst::ADD(format) => {
+                cpu.regs[format.rd] = cpu.regs[format.rs1].wrapping_add(cpu.regs[format.rs2])
+            }
+            Inst::ADDI(format) => {
+                cpu.regs[format.rd] = cpu.regs[format.rs1].wrapping_add(format.imm12)
+            }
         }
     }
 }
@@ -77,29 +140,18 @@ impl Cpu {
         // get the lowest 7 bits for the opcode
         let opcode = get_bits(raw_inst, 0, 6);
         let inst = match opcode {
-            // R-Format
             0b0110011 => {
-                let rd = get_bits(raw_inst, 7, 11);
-                let funct3 = get_bits(raw_inst, 12, 14);
-                let rs1 = get_bits(raw_inst, 15, 19);
-                let rs2 = get_bits(raw_inst, 20, 24);
-                let funct7 = get_bits(raw_inst, 25, 31);
-
-                match (funct3, funct7) {
-                    (0x0, 0x00) => Inst::ADD(rd, rs1, rs2),
-                    _ => return Err(Error::InvalidRInst(funct3, funct7)),
+                let r_format = RFormat::new(raw_inst);
+                match (r_format.funct3, r_format.funct7) {
+                    (0x0, 0x00) => Inst::ADD(r_format),
+                    _ => return Err(Error::InvalidInstFormat(Box::new(r_format))),
                 }
             }
-            // I-Format
             0b0010011 => {
-                let rd = get_bits(raw_inst, 7, 11);
-                let funct3 = get_bits(raw_inst, 12, 14);
-                let rs1 = get_bits(raw_inst, 15, 19);
-                let imm = get_bits(raw_inst, 20, 31);
-
-                match funct3 {
-                    0x0 => Inst::ADDI(rd, rs1, imm as u32),
-                    _ => return Err(Error::InvalidIInst(funct3)),
+                let i_format = IFormat::new(raw_inst);
+                match i_format.funct3 {
+                    0x0 => Inst::ADDI(i_format),
+                    _ => return Err(Error::InvalidInstFormat(Box::new(i_format))),
                 }
             }
             _ => return Err(Error::InvalidOpcode(opcode)),
@@ -118,23 +170,18 @@ impl Cpu {
 
 enum Error {
     InvalidOpcode(usize),
-    InvalidRInst(FUNCT3, FUNCT7),
-    InvalidIInst(FUNCT3),
+    InvalidInstFormat(Box<dyn fmt::Display>),
     InvalidPC,
 }
-impl fmt::Display for Error {
+impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "error: {}",
+            "{}",
             match self {
-                Error::InvalidOpcode(opcode) =>
-                    format!("invalid opcode: {opcode}"),
-                Error::InvalidRInst(funct3, funct7) =>
-                    format!("invalid funct3: '{funct3}', funct7: '{funct7}' combination in R-format instruction"),
-                Error::InvalidIInst(funct3) =>
-                    format!("invalid funct3: '{funct3}' in I-format instruction"),
-                Error::InvalidPC => "pc bigger then mem".to_string(),
+                Error::InvalidOpcode(opcode) => format!("invalid opcode: {:b}", opcode),
+                Error::InvalidInstFormat(format) => format.to_string(),
+                Error::InvalidPC => "pc bigger than mem".to_string(),
             }
         )
     }
@@ -177,11 +224,8 @@ fn read_bin() -> Vec<u8> {
     program
 }
 
-fn main() {
+fn main() -> Result<(), Error> {
     let program = read_bin();
     let cpu = Cpu::new();
-    match run(cpu, program) {
-        Ok(_) => (),
-        Err(e) => eprint!("{e}"),
-    }
+    run(cpu, program)
 }
