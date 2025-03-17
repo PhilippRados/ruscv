@@ -8,12 +8,8 @@ use error::Error;
 use std::fs::File;
 use std::io::Read;
 
-fn read_bin() -> Vec<u8> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 {
-        panic!("Usage: ruscv <filename>");
-    }
-    let mut file = File::open(&args[1]).expect("valid binary input file");
+fn read_bin(path: &str) -> Vec<u8> {
+    let mut file = File::open(path).expect("valid binary input file");
     let mut program = Vec::new();
     file.read_to_end(&mut program).expect("can read binary");
 
@@ -21,6 +17,11 @@ fn read_bin() -> Vec<u8> {
 }
 
 fn main() -> Result<(), Error> {
-    let program = read_bin();
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        panic!("Usage: ruscv <filename>");
+    }
+
+    let program = read_bin(&args[1]);
     Cpu::new().run(program)
 }

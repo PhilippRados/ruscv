@@ -58,7 +58,7 @@ impl Cpu {
         eprintln!("CPU dump at cycle {cycle_count}:");
         eprintln!("PC: {}", self.pc);
         for i in 0..32 {
-            eprintln!("R{i}: {}", self.regs[i]);
+            eprintln!("R{i}: {}", self.regs[i] as i32);
         }
     }
 
@@ -139,13 +139,47 @@ impl Cpu {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use std::process::Command;
+
+    fn asm_to_bin(asm: &'static str) -> Vec<u8> {
+        let mut asm_temp = tempfile::Builder::new()
+            .suffix(".s")
+            .tempfile()
+            .expect("tempfile create");
+        write!(asm_temp, "{}", asm).expect("write asm to tempfile");
+
+        let executable = tempfile::NamedTempFile::new().expect("tempfile create");
+        Command::new("riscv64-unknown-elf-gcc")
+            .args([
+                "-Wl,-Ttext=0x0",
+                "-nostdlib",
+                "-o",
+                executable.path().to_str().unwrap(),
+                asm_temp.path().to_str().unwrap(),
+                "-march=rv32i",
+                "-mabi=ilp32",
+            ])
+            .output()
+            .expect("invokes riscv gcc cross compiler");
+
+        let binary = tempfile::NamedTempFile::new().expect("tempfile create");
+        Command::new("riscv64-unknown-elf-objcopy")
+            .args([
+                "-O",
+                "binary",
+                executable.path().to_str().unwrap(),
+                binary.path().to_str().unwrap(),
+            ])
+            .output()
+            .expect("invokes riscv objcopy");
+
+        crate::read_bin(binary.path().to_str().unwrap())
+    }
 
     #[test]
     fn x0_hardwired() {
-        /*
-         * addi x0, x0, -127
-         * */
-        let program = vec![0x13, 0x0, 0x10, 0xf8];
+        let program = asm_to_bin("addi x0, x0, -127\n");
         let mut cpu = Cpu::new();
         cpu.load_program(program);
 
@@ -155,10 +189,7 @@ mod tests {
 
     #[test]
     fn negative_assign() {
-        /*
-         * addi x31, x0, -127
-         * */
-        let program = vec![0x93, 0x0f, 0x10, 0xf8];
+        let program = asm_to_bin("addi x31, x0, -127\n");
         let mut cpu = Cpu::new();
         cpu.load_program(program);
 
