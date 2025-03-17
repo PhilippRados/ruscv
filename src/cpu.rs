@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::inst::Inst;
+use crate::inst::*;
 use crate::inst_format::*;
 
 const MEMSIZE: usize = 1024;
@@ -87,17 +87,21 @@ impl Cpu {
         let inst = match opcode {
             0b0110011 => {
                 let r_format = RFormat::new(raw_inst);
-                match (r_format.funct3, r_format.funct7) {
-                    (0x0, 0x00) => Inst::ADD(r_format),
+                let inst = match (r_format.funct3, r_format.funct7) {
+                    (0x0, 0x00) => RInst::ADD,
                     _ => return Err(Error::InvalidInstFormat(Box::new(r_format))),
-                }
+                };
+
+                Inst::R(inst, r_format)
             }
             0b0010011 => {
                 let i_format = IFormat::new(raw_inst);
-                match i_format.funct3 {
-                    0x0 => Inst::ADDI(i_format),
+                let inst = match i_format.funct3 {
+                    0x0 => IInst::ADDI,
                     _ => return Err(Error::InvalidInstFormat(Box::new(i_format))),
-                }
+                };
+
+                Inst::I(inst, i_format)
             }
             _ => return Err(Error::InvalidOpcode(opcode)),
         };
