@@ -1,16 +1,24 @@
 use std::fmt;
 
-// helper function to get the bits from a range [from, to] inside a u32
-pub fn get_bits(n: u32, from: u32, to: u32) -> usize {
-    // inclusive range
-    let range = to - from + 1;
-    // builds a binary number consisting of only ones with the len of range
-    // so 3 -> 111
-    let ones = (1 << range) - 1;
-    // we only want to keep bits in the range
-    let mask = ones << from;
-    // apply mask and move matched pattern to lsb
-    usize::try_from((n & mask) >> from).unwrap()
+// extracts range of bits from integer, can be sign- or zero-extended depending on n_type
+#[macro_export]
+macro_rules! get_bits {
+    // defaults to zero-extension
+    ($n:expr, $from:expr, $to:expr) => {
+        get_bits!($n, $from, $to, usize)
+    };
+
+    ($n:expr, $from:expr, $to:expr, $n_type:ty) => {{
+        // inclusive range
+        let range = $to - $from + 1;
+        // builds a binary number consisting of only ones with the len of range
+        // so 3 -> 111
+        let ones = (1 << range) - 1;
+        // we only want to keep bits in the range
+        let mask = ones << $from;
+        // apply mask and move matched pattern to lsb
+        ($n as $n_type & mask) >> $from
+    }};
 }
 
 pub struct RFormat {
@@ -22,11 +30,11 @@ pub struct RFormat {
 }
 impl RFormat {
     pub fn new(raw_inst: u32) -> Self {
-        let rd = get_bits(raw_inst, 7, 11);
-        let funct3 = get_bits(raw_inst, 12, 14);
-        let rs1 = get_bits(raw_inst, 15, 19);
-        let rs2 = get_bits(raw_inst, 20, 24);
-        let funct7 = get_bits(raw_inst, 25, 31);
+        let rd = get_bits!(raw_inst, 7, 11);
+        let funct3 = get_bits!(raw_inst, 12, 14);
+        let rs1 = get_bits!(raw_inst, 15, 19);
+        let rs2 = get_bits!(raw_inst, 20, 24);
+        let funct7 = get_bits!(raw_inst, 25, 31);
 
         RFormat {
             rd,
@@ -56,10 +64,11 @@ pub struct IFormat {
 }
 impl IFormat {
     pub fn new(raw_inst: u32) -> Self {
-        let rd = get_bits(raw_inst, 7, 11);
-        let funct3 = get_bits(raw_inst, 12, 14);
-        let rs1 = get_bits(raw_inst, 15, 19);
-        let imm12 = get_bits(raw_inst, 20, 31) as u32;
+        let rd = get_bits!(raw_inst, 7, 11);
+        let funct3 = get_bits!(raw_inst, 12, 14);
+        let rs1 = get_bits!(raw_inst, 15, 19);
+        // immediates are sign-extended!
+        let imm12 = get_bits!(raw_inst, 20, 31, i32) as u32;
 
         IFormat {
             rd,
@@ -76,5 +85,21 @@ impl fmt::Display for IFormat {
             "invalid I-format instruction: funct3: '{:b}'",
             self.funct3
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn get_bits_base() {
+        assert_eq!(0b1101, get_bits!(0b111101101, 0, 3));
+        assert_eq!(0b110, get_bits!(0b111101101, 4, 6));
+    }
+
+    #[test]
+    fn get_bits_sign_extended() {
+        let n: usize = 0b11111000000100000000111110010011;
+        assert_eq!(-127, get_bits!(n, 20, 31, i32));
+        assert_eq!(0b011, get_bits!(n, 10, 13, i32));
     }
 }

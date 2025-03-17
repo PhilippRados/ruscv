@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::get_bits;
 use crate::inst::*;
 use crate::inst_format::*;
 
@@ -83,7 +84,7 @@ impl Cpu {
     // for decode information see: [riscv-ref](crate::docs/riscv-ref)
     fn decode(&self, raw_inst: u32) -> Result<Inst, Error> {
         // get the lowest 7 bits for the opcode
-        let opcode = get_bits(raw_inst, 0, 6);
+        let opcode = get_bits!(raw_inst, 0, 6);
         let inst = match opcode {
             0b0110011 => {
                 let r_format = RFormat::new(raw_inst);
@@ -105,7 +106,7 @@ impl Cpu {
             }
             0b0010011 => {
                 let i_format = IFormat::new(raw_inst);
-                let upper_imm = get_bits(i_format.imm12, 5, 11);
+                let upper_imm = get_bits!(i_format.imm12, 5, 11);
                 let inst = match (i_format.funct3, upper_imm) {
                     (0x0, _) => IInst::ADDI,
                     (0x4, _) => IInst::XORI,
@@ -132,5 +133,38 @@ impl Cpu {
         let inst = self.decode(raw_inst)?;
         inst.execute(self);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn x0_hardwired() {
+        /*
+         * addi x0, x0, -127
+         * */
+        let program = vec![0x13, 0x0, 0x10, 0xf8];
+        let mut cpu = Cpu::new();
+        cpu.load_program(program);
+
+        assert!(cpu.emulate_cycle().is_ok());
+        assert_eq!(0, cpu.read_reg(0));
+    }
+
+    #[test]
+    fn negative_assign() {
+        /*
+         * addi x31, x0, -127
+         * */
+        let program = vec![0x93, 0x0f, 0x10, 0xf8];
+        let mut cpu = Cpu::new();
+        cpu.load_program(program);
+
+        assert!(cpu.emulate_cycle().is_ok());
+        let n = -127;
+        assert_eq!(n as u32, cpu.read_reg(31));
+        assert_eq!(0, cpu.read_reg(0));
     }
 }

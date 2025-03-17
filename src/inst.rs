@@ -1,4 +1,5 @@
 use crate::cpu::Cpu;
+use crate::get_bits;
 use crate::inst_format::*;
 
 use std::ops::BitAnd;
@@ -31,15 +32,15 @@ impl RInst {
             RInst::OR => u32::bitor,
             RInst::AND => u32::bitand,
             RInst::SLL => |rs1, rs2| {
-                let amount = get_bits(rs2, 0, 4);
+                let amount = get_bits!(rs2, 0, 4);
                 rs1 << amount
             },
             RInst::SRL => |rs1, rs2| {
-                let amount = get_bits(rs2, 0, 4);
+                let amount = get_bits!(rs2, 0, 4);
                 rs1 >> amount
             },
             RInst::SRA => |rs1, rs2| {
-                let amount = get_bits(rs2, 0, 4);
+                let amount = get_bits!(rs2, 0, 4, i32);
                 (rs1 as i32 >> amount as i32) as u32
             },
             RInst::SLT => |rs1, rs2| ((rs1 as i32) < (rs2 as i32)) as u32,
