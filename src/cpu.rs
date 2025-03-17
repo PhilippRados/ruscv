@@ -89,6 +89,15 @@ impl Cpu {
                 let r_format = RFormat::new(raw_inst);
                 let inst = match (r_format.funct3, r_format.funct7) {
                     (0x0, 0x00) => RInst::ADD,
+                    (0x0, 0x20) => RInst::SUB,
+                    (0x4, 0x00) => RInst::XOR,
+                    (0x6, 0x00) => RInst::OR,
+                    (0x7, 0x00) => RInst::AND,
+                    (0x1, 0x00) => RInst::SLL,
+                    (0x5, 0x00) => RInst::SRL,
+                    (0x5, 0x20) => RInst::SRA,
+                    (0x2, 0x00) => RInst::SLT,
+                    (0x3, 0x00) => RInst::SLTU,
                     _ => return Err(Error::InvalidInstFormat(Box::new(r_format))),
                 };
 
@@ -96,8 +105,17 @@ impl Cpu {
             }
             0b0010011 => {
                 let i_format = IFormat::new(raw_inst);
-                let inst = match i_format.funct3 {
-                    0x0 => IInst::ADDI,
+                let upper_imm = get_bits(i_format.imm12, 5, 11);
+                let inst = match (i_format.funct3, upper_imm) {
+                    (0x0, _) => IInst::ADDI,
+                    (0x4, _) => IInst::XORI,
+                    (0x6, _) => IInst::ORI,
+                    (0x7, _) => IInst::ANDI,
+                    (0x1, 0x00) => IInst::SLLI,
+                    (0x5, 0x00) => IInst::SRLI,
+                    (0x5, 0x20) => IInst::SRAI,
+                    (0x2, _) => IInst::SLTI,
+                    (0x3, _) => IInst::SLTIU,
                     _ => return Err(Error::InvalidInstFormat(Box::new(i_format))),
                 };
 
