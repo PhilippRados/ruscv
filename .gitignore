@@ -1,1 +1,5 @@
 /target
+
+# ignore all binary files in the tests/fixtures folder
+tests/fixtures/*
+!tests/fixtures/*.s
