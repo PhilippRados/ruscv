@@ -25,7 +25,7 @@ impl Cpu {
         }
     }
 
-    pub fn run(mut self, program: Vec<u8>) -> Result<(), Error> {
+    pub fn run(&mut self, program: Vec<u8>) -> Result<(), Error> {
         let program_cycles = program.len() / INSTSIZE_BYTES;
         self.load_program(program);
 
@@ -140,15 +140,25 @@ impl Cpu {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::path::Path;
     use std::process::Command;
 
+    fn file_to_bin(path: &'static str) -> Vec<u8> {
+        let mut current_path = std::env::current_dir().unwrap();
+        current_path.push("tests");
+        current_path.push(path);
+        create_bin(current_path.as_path())
+    }
     fn asm_to_bin(asm: &'static str) -> Vec<u8> {
         let mut asm_temp = tempfile::Builder::new()
             .suffix(".s")
             .tempfile()
             .expect("tempfile create");
         write!(asm_temp, "{}", asm).expect("write asm to tempfile");
+        create_bin(asm_temp.path())
+    }
 
+    fn create_bin(asm_filepath: &Path) -> Vec<u8> {
         let executable = tempfile::NamedTempFile::new().expect("tempfile create");
         Command::new("riscv64-unknown-elf-gcc")
             .args([
@@ -156,7 +166,7 @@ mod tests {
                 "-nostdlib",
                 "-o",
                 executable.path().to_str().unwrap(),
-                asm_temp.path().to_str().unwrap(),
+                asm_filepath.to_str().unwrap(),
                 "-march=rv32i",
                 "-mabi=ilp32",
             ])
@@ -197,5 +207,31 @@ mod tests {
         let n = -127;
         assert_eq!(n as u32, cpu.read_reg(31));
         assert_eq!(0, cpu.read_reg(0));
+    }
+    #[test]
+    fn arithmetic() {
+        let program = file_to_bin("arith.s");
+        let mut cpu = Cpu::new();
+
+        assert!(cpu.run(program).is_ok());
+        assert_eq!(cpu.read_reg(27) as i32, -26);
+        assert_eq!(cpu.read_reg(28) as i32, -6);
+        assert_eq!(cpu.read_reg(29), 5);
+        assert_eq!(cpu.read_reg(30) as i32, -32);
+        assert_eq!(cpu.read_reg(31) as i32, 42);
+        assert_eq!(cpu.pc, 24);
+    }
+
+    #[test]
+    fn bitops() {
+        let program = file_to_bin("bitops.s");
+        let mut cpu = Cpu::new();
+
+        assert!(cpu.run(program).is_ok());
+        assert_eq!(cpu.read_reg(28) as i32, 1);
+        assert_eq!(cpu.read_reg(29), 5);
+        assert_eq!(cpu.read_reg(30) as i32, -123);
+        assert_eq!(cpu.read_reg(31), 0);
+        assert_eq!(cpu.pc, 20);
     }
 }

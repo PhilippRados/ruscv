@@ -1,5 +1,7 @@
 /target
 
+.DS_Store
+
 # ignore all binary files in the tests/fixtures folder
-tests/fixtures/*
-!tests/fixtures/*.s
+tests/*
+!tests/*.s

@@ -4,4 +4,4 @@ _start:
   add x31, x30, x29
   sub x30, x29, x30
   addi x28, x0, -6
-  sub x27, x30,x28
+  sub x27, x30, x28
