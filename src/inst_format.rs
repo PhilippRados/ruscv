@@ -1,6 +1,6 @@
 use std::fmt;
 
-// extracts range of bits from integer, can be sign- or zero-extended depending on n_type
+// extracts inclusive range of bits from integer, can be sign- or zero-extended depending on n_type
 #[macro_export]
 macro_rules! get_bits {
     // defaults to zero-extension
@@ -60,7 +60,7 @@ pub struct IFormat {
     pub rd: usize,
     pub funct3: usize,
     pub rs1: usize,
-    pub imm12: u32,
+    pub imm: u32,
 }
 impl IFormat {
     pub fn new(raw_inst: u32) -> Self {
@@ -68,17 +68,50 @@ impl IFormat {
         let funct3 = get_bits!(raw_inst, 12, 14);
         let rs1 = get_bits!(raw_inst, 15, 19);
         // immediates are sign-extended!
-        let imm12 = get_bits!(raw_inst, 20, 31, i32) as u32;
+        let imm = get_bits!(raw_inst, 20, 31, i32) as u32;
 
         IFormat {
             rd,
             funct3,
             rs1,
-            imm12,
+            imm,
         }
     }
 }
 impl fmt::Display for IFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "invalid I-format instruction: funct3: '{:b}'",
+            self.funct3
+        )
+    }
+}
+
+pub struct SFormat {
+    pub funct3: usize,
+    pub rs1: usize,
+    pub rs2: usize,
+    pub imm: u32,
+}
+impl SFormat {
+    pub fn new(raw_inst: u32) -> Self {
+        let imm_lo = get_bits!(raw_inst, 7, 11);
+        let funct3 = get_bits!(raw_inst, 12, 14);
+        let rs1 = get_bits!(raw_inst, 15, 19);
+        let rs2 = get_bits!(raw_inst, 20, 24);
+        let imm_hi = get_bits!(raw_inst, 25, 31);
+        let imm = ((imm_hi << 5) | imm_lo) as i32 as u32;
+
+        SFormat {
+            funct3,
+            rs1,
+            rs2,
+            imm,
+        }
+    }
+}
+impl fmt::Display for SFormat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

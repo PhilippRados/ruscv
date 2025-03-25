@@ -6,10 +6,17 @@ use crate::inst_format::*;
 const MEMSIZE: usize = 1024;
 const INSTSIZE_BYTES: usize = 4;
 
+pub struct Memory(pub [u8; MEMSIZE]);
+impl Memory {
+    pub fn new() -> Self {
+        Memory([0; MEMSIZE])
+    }
+}
+
 pub struct Cpu {
     regs: [u32; 32],
     pc: u32,
-    mem: [u8; MEMSIZE], // should wrap around
+    pub mem: Memory, // should wrap around
 }
 
 impl Cpu {
@@ -21,7 +28,7 @@ impl Cpu {
         Cpu {
             regs,
             pc: 0,
-            mem: [0; MEMSIZE],
+            mem: Memory::new(),
         }
     }
 
@@ -65,7 +72,7 @@ impl Cpu {
     // loads program to start of the memory
     fn load_program(&mut self, mut program: Vec<u8>) {
         program.resize_with(MEMSIZE, || 0);
-        self.mem = program.as_slice().try_into().unwrap()
+        self.mem.0 = program.as_slice().try_into().unwrap()
     }
 
     // fetches a 32 bit instruction from memory
@@ -77,7 +84,9 @@ impl Cpu {
         }
 
         // return instruction in little-endian
-        Ok(u32::from_le_bytes(self.mem[pc..pc + 4].try_into().unwrap()))
+        Ok(u32::from_le_bytes(
+            self.mem.0[pc..pc + 4].try_into().unwrap(),
+        ))
     }
 
     // parses raw byte instruction into correct format
@@ -106,22 +115,47 @@ impl Cpu {
             }
             0b0010011 => {
                 let i_format = IFormat::new(raw_inst);
-                let upper_imm = get_bits!(i_format.imm12, 5, 11);
+                let upper_imm = get_bits!(i_format.imm, 5, 11);
                 let inst = match (i_format.funct3, upper_imm) {
-                    (0x0, _) => IInst::ADDI,
-                    (0x4, _) => IInst::XORI,
-                    (0x6, _) => IInst::ORI,
-                    (0x7, _) => IInst::ANDI,
-                    (0x1, 0x00) => IInst::SLLI,
-                    (0x5, 0x00) => IInst::SRLI,
-                    (0x5, 0x20) => IInst::SRAI,
-                    (0x2, _) => IInst::SLTI,
-                    (0x3, _) => IInst::SLTIU,
+                    (0x0, _) => ArithIInst::ADDI,
+                    (0x4, _) => ArithIInst::XORI,
+                    (0x6, _) => ArithIInst::ORI,
+                    (0x7, _) => ArithIInst::ANDI,
+                    (0x1, 0x00) => ArithIInst::SLLI,
+                    (0x5, 0x00) => ArithIInst::SRLI,
+                    (0x5, 0x20) => ArithIInst::SRAI,
+                    (0x2, _) => ArithIInst::SLTI,
+                    (0x3, _) => ArithIInst::SLTIU,
                     _ => return Err(Error::InvalidInstFormat(Box::new(i_format))),
                 };
 
-                Inst::I(inst, i_format)
+                Inst::I(IInst::Arith(inst), i_format)
             }
+            0b0000011 => {
+                let i_format = IFormat::new(raw_inst);
+                let inst = match i_format.funct3 {
+                    0x0 => MemIInst::LB,
+                    0x1 => MemIInst::LH,
+                    0x2 => MemIInst::LW,
+                    0x4 => MemIInst::LBU,
+                    0x5 => MemIInst::LHU,
+                    _ => return Err(Error::InvalidInstFormat(Box::new(i_format))),
+                };
+
+                Inst::I(IInst::Mem(inst), i_format)
+            }
+            0b0100011 => {
+                let s_format = SFormat::new(raw_inst);
+                let inst = match s_format.funct3 {
+                    0x0 => SInst::SB,
+                    0x1 => SInst::SH,
+                    0x2 => SInst::SW,
+                    _ => return Err(Error::InvalidInstFormat(Box::new(s_format))),
+                };
+
+                Inst::S(inst, s_format)
+            }
+
             _ => return Err(Error::InvalidOpcode(opcode)),
         };
 
@@ -160,29 +194,37 @@ mod tests {
 
     fn create_bin(asm_filepath: &Path) -> Vec<u8> {
         let executable = tempfile::NamedTempFile::new().expect("tempfile create");
-        Command::new("riscv64-unknown-elf-gcc")
-            .args([
-                "-Wl,-Ttext=0x0",
-                "-nostdlib",
-                "-o",
-                executable.path().to_str().unwrap(),
-                asm_filepath.to_str().unwrap(),
-                "-march=rv32i",
-                "-mabi=ilp32",
-            ])
-            .output()
-            .expect("invokes riscv gcc cross compiler");
+        assert!(
+            Command::new("riscv64-unknown-elf-gcc")
+                .args([
+                    "-Wl,-Ttext=0x0",
+                    "-nostdlib",
+                    "-o",
+                    executable.path().to_str().unwrap(),
+                    asm_filepath.to_str().unwrap(),
+                    "-march=rv32i",
+                    "-mabi=ilp32",
+                ])
+                .status()
+                .expect("invokes riscv gcc cross compiler")
+                .success(),
+            "invalid asm"
+        );
 
         let binary = tempfile::NamedTempFile::new().expect("tempfile create");
-        Command::new("riscv64-unknown-elf-objcopy")
-            .args([
-                "-O",
-                "binary",
-                executable.path().to_str().unwrap(),
-                binary.path().to_str().unwrap(),
-            ])
-            .output()
-            .expect("invokes riscv objcopy");
+        assert!(
+            Command::new("riscv64-unknown-elf-objcopy")
+                .args([
+                    "-O",
+                    "binary",
+                    executable.path().to_str().unwrap(),
+                    binary.path().to_str().unwrap(),
+                ])
+                .status()
+                .expect("invokes riscv objcopy")
+                .success(),
+            "invalid elf"
+        );
 
         crate::read_bin(binary.path().to_str().unwrap())
     }
@@ -233,5 +275,38 @@ mod tests {
         assert_eq!(cpu.read_reg(30) as i32, -123);
         assert_eq!(cpu.read_reg(31), 0);
         assert_eq!(cpu.pc, 20);
+    }
+    #[test]
+    fn load() {
+        let program = asm_to_bin(
+            "
+  addi x28, x0, 60\n
+  sw x28, 20(x0)\n
+  lw x30, 20(x0)\n",
+        );
+        let mut cpu = Cpu::new();
+
+        assert!(cpu.run(program).is_ok());
+        assert_eq!(cpu.read_reg(30), 60);
+        assert_eq!(cpu.read_reg(28), 60);
+        assert_eq!(cpu.mem.0[20], 60);
+    }
+
+    #[test]
+    fn negative_load_imm() {
+        let program = asm_to_bin(
+            "
+  addi x28, x0, 60\n
+  sw x28, 20(x0)\n
+  addi x27, x0, 21\n
+  lw x30, -1(x27)\n",
+        );
+        let mut cpu = Cpu::new();
+
+        assert!(cpu.run(program).is_ok());
+        assert_eq!(cpu.read_reg(27), 21);
+        assert_eq!(cpu.read_reg(28), 60);
+        assert_eq!(cpu.read_reg(30), 60);
+        assert_eq!(cpu.mem.0[20], 60);
     }
 }
