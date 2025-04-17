@@ -177,7 +177,6 @@ impl Cpu {
 
     fn emulate_cycle(&mut self) -> Result<(), Error> {
         let raw_inst = self.fetch()?;
-        eprintln!("{:b}", raw_inst);
         let inst = self.decode(raw_inst)?;
         inst.execute(self);
         Ok(())
@@ -202,7 +201,7 @@ mod tests {
             .suffix(".s")
             .tempfile()
             .expect("tempfile create");
-        write!(asm_temp, "{}", asm).expect("write asm to tempfile");
+        write!(asm_temp, ".global _start\n_start:\n{}", asm).expect("write asm to tempfile");
         create_bin(asm_temp.path())
     }
 

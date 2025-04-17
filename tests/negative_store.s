@@ -1,3 +1,4 @@
+.global _start
 _start:
   addi x28, x0, 60
   # make sure not to overwrite program memory so use higher address like 256

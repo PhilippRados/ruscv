@@ -1,3 +1,4 @@
+.global _start
 _start:
   addi x31, x0, -127
   ori x30, x31, 5
