@@ -11,6 +11,7 @@ pub enum Inst {
     R(RInst, RFormat),
     I(IInst, IFormat),
     S(SInst, SFormat),
+    B(BInst, BFormat),
 }
 
 pub enum RInst {
@@ -136,6 +137,15 @@ impl SInst {
     }
 }
 
+pub enum BInst {
+    BEQ,
+    BNE,
+    BLT,
+    BGE,
+    BLTU,
+    BGEU,
+}
+
 impl Inst {
     pub fn execute(self, cpu: &mut Cpu) {
         // TODO: Do these actually have to be closures? Why not compute values directly
@@ -160,6 +170,21 @@ impl Inst {
                 let rs2 = cpu.read_reg(format.rs2);
                 let alu = inst.op(&mut cpu.mem);
                 alu(rs1, rs2, format.imm);
+            }
+            Inst::B(inst, format) => {
+                let rs1 = cpu.read_reg(format.rs1);
+                let rs2 = cpu.read_reg(format.rs2);
+                let branch = match inst {
+                    BInst::BEQ => rs1 == rs2,
+                    BInst::BNE => rs1 != rs2,
+                    BInst::BLT => rs1 as i32 <= rs2 as i32,
+                    BInst::BLTU => rs1 <= rs2,
+                    BInst::BGE => rs1 as i32 >= rs2 as i32,
+                    BInst::BGEU => rs1 >= rs2,
+                };
+                if branch {
+                    cpu.pc = u32::wrapping_add(cpu.pc, format.imm)
+                }
             }
         }
     }

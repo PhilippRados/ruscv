@@ -15,7 +15,7 @@ impl Memory {
 
 pub struct Cpu {
     regs: [u32; 32],
-    pc: u32,
+    pub pc: u32,
     pub mem: Memory, // should wrap around
 }
 
@@ -155,7 +155,20 @@ impl Cpu {
 
                 Inst::S(inst, s_format)
             }
+            0b1100011 => {
+                let b_format = BFormat::new(raw_inst);
+                let inst = match b_format.funct3 {
+                    0x0 => BInst::BEQ,
+                    0x1 => BInst::BNE,
+                    0x4 => BInst::BLT,
+                    0x5 => BInst::BGE,
+                    0x6 => BInst::BLTU,
+                    0x7 => BInst::BGEU,
+                    _ => return Err(Error::InvalidInstFormat(Box::new(b_format))),
+                };
 
+                Inst::B(inst, b_format)
+            }
             _ => return Err(Error::InvalidOpcode(opcode)),
         };
 
@@ -164,6 +177,7 @@ impl Cpu {
 
     fn emulate_cycle(&mut self) -> Result<(), Error> {
         let raw_inst = self.fetch()?;
+        eprintln!("{:b}", raw_inst);
         let inst = self.decode(raw_inst)?;
         inst.execute(self);
         Ok(())
@@ -278,12 +292,7 @@ mod tests {
     }
     #[test]
     fn load() {
-        let program = asm_to_bin(
-            "
-  addi x28, x0, 60\n
-  sw x28, 20(x0)\n
-  lw x30, 20(x0)\n",
-        );
+        let program = file_to_bin("load.s");
         let mut cpu = Cpu::new();
 
         assert!(cpu.run(program).is_ok());
@@ -294,13 +303,7 @@ mod tests {
 
     #[test]
     fn negative_load_imm() {
-        let program = asm_to_bin(
-            "
-  addi x28, x0, 60\n
-  sw x28, 20(x0)\n
-  addi x27, x0, 21\n
-  lw x30, -1(x27)\n",
-        );
+        let program = file_to_bin("negative_load.s");
         let mut cpu = Cpu::new();
 
         assert!(cpu.run(program).is_ok());
@@ -308,5 +311,18 @@ mod tests {
         assert_eq!(cpu.read_reg(28), 60);
         assert_eq!(cpu.read_reg(30), 60);
         assert_eq!(cpu.mem.0[20], 60);
+    }
+
+    #[test]
+    fn negative_store_imm() {
+        let program = file_to_bin("negative_store.s");
+        let mut cpu = Cpu::new();
+
+        assert!(cpu.run(program).is_ok());
+        assert_eq!(cpu.read_reg(22), 261);
+        assert_eq!(cpu.read_reg(27), 256);
+        assert_eq!(cpu.read_reg(28), 60);
+        assert_eq!(cpu.read_reg(30), 60);
+        assert_eq!(cpu.mem.0[256], 60);
     }
 }
