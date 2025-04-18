@@ -11,6 +11,7 @@ pub enum Inst {
     I(IInst, IFormat),
     S(SInst, SFormat),
     B(BInst, BFormat),
+    J(JFormat),
 }
 
 pub enum RInst {
@@ -110,6 +111,7 @@ impl MemIInst {
 pub enum IInst {
     Arith(ArithIInst),
     Mem(MemIInst),
+    Jump,
 }
 
 pub enum SInst {
@@ -120,17 +122,18 @@ pub enum SInst {
 
 impl SInst {
     fn op(self, mem: &mut Memory) -> Box<dyn FnOnce(u32, u32, u32) + '_> {
-        let size_bits: usize = match &self {
-            SInst::SB => 8,
-            SInst::SH => 16,
-            SInst::SW => 32,
+        let size_bytes: usize = match &self {
+            SInst::SB => 1,
+            SInst::SH => 2,
+            SInst::SW => 4,
         };
 
         Box::new(move |rs1, rs2, imm| {
             let base = u32::wrapping_add(rs1, imm);
-            for i in (0..size_bits).step_by(8) {
+            for i in 0..size_bytes {
                 let address = u32::wrapping_add(base, i as u32);
-                mem.0[address as usize] = get_bits!(rs2, i, i + 7) as u8;
+                let bit_offset = i * 8;
+                mem.0[address as usize] = get_bits!(rs2, bit_offset, bit_offset + 7) as u8;
             }
         })
     }
@@ -156,14 +159,23 @@ impl Inst {
                 cpu.write_reg(format.rd, result);
             }
             Inst::I(inst, format) => {
+                let mut is_jump = false;
                 let alu = match inst {
                     // Arithmetic operations are the same for R/I format, only the second operand differs.
                     IInst::Arith(inst) => RInst::from(inst).op(),
                     IInst::Mem(inst) => inst.op(&cpu.mem),
+                    IInst::Jump => {
+                        is_jump = true;
+                        Box::new(|_, _| cpu.pc)
+                    }
                 };
 
                 let result = alu(cpu.read_reg(format.rs1), format.imm);
                 cpu.write_reg(format.rd, result);
+
+                if is_jump {
+                    cpu.pc = u32::wrapping_add(cpu.read_reg(format.rs1), format.imm);
+                }
             }
             Inst::S(inst, format) => {
                 let rs1 = cpu.read_reg(format.rs1);
@@ -182,13 +194,17 @@ impl Inst {
                     BInst::BGE => rs1 as i32 >= rs2 as i32,
                     BInst::BGEU => rs1 >= rs2,
                 };
-                dbg!(inst);
                 if branch {
                     cpu.pc = u32::wrapping_add(
                         cpu.pc,
                         u32::wrapping_sub(format.imm, INSTSIZE_BYTES as u32),
                     );
                 }
+            }
+            Inst::J(format) => {
+                cpu.write_reg(format.rd, cpu.pc);
+                cpu.pc =
+                    u32::wrapping_add(cpu.pc, u32::wrapping_sub(format.imm, INSTSIZE_BYTES as u32));
             }
         }
     }

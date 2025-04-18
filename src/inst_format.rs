@@ -163,6 +163,24 @@ impl fmt::Display for BFormat {
     }
 }
 
+pub struct JFormat {
+    pub rd: usize,
+    pub imm: u32,
+}
+impl JFormat {
+    pub fn new(raw_inst: u32) -> Self {
+        let rd = get_bits!(raw_inst, 7, 11);
+        let imm_hi = get_bits!(raw_inst, 12, 19, i32);
+        let imm_11th_bit = get_bits!(raw_inst, 20, 20, i32);
+        let imm_lo = get_bits!(raw_inst, 21, 30, i32);
+        let imm_20th_bit = get_bits!(raw_inst, 31, 31, i32);
+        let imm =
+            ((imm_20th_bit << 20) | (imm_hi << 12) | (imm_11th_bit << 11) | (imm_lo << 1)) as u32;
+
+        JFormat { rd, imm }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

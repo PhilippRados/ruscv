@@ -150,6 +150,14 @@ impl Cpu {
 
                 Inst::I(IInst::Mem(inst), i_format)
             }
+            0b1100111 => {
+                let i_format = IFormat::new(raw_inst);
+                if let 0x0 = i_format.funct3 {
+                    Inst::I(IInst::Jump, i_format)
+                } else {
+                    return Err(Error::InvalidInstFormat(Box::new(i_format)));
+                }
+            }
             0b0100011 => {
                 let s_format = SFormat::new(raw_inst);
                 let inst = match s_format.funct3 {
@@ -174,6 +182,10 @@ impl Cpu {
                 };
 
                 Inst::B(inst, b_format)
+            }
+            0b1101111 => {
+                // jal instruction is only J-Format instruction
+                Inst::J(JFormat::new(raw_inst))
             }
             _ => return Err(Error::InvalidOpcode(opcode)),
         };
