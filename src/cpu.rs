@@ -4,7 +4,12 @@ use crate::inst::*;
 use crate::inst_format::*;
 
 const MEMSIZE: usize = 1024;
-const INSTSIZE_BYTES: usize = 4;
+pub const INSTSIZE_BYTES: usize = 4;
+
+enum ProgState {
+    Continue,
+    Done,
+}
 
 pub struct Memory(pub [u8; MEMSIZE]);
 impl Memory {
@@ -33,11 +38,12 @@ impl Cpu {
     }
 
     pub fn run(&mut self, program: Vec<u8>) -> Result<(), Error> {
-        let program_cycles = program.len() / INSTSIZE_BYTES;
         self.load_program(program);
 
-        for cycle in 0..program_cycles {
-            self.emulate_cycle()?;
+        for cycle in 0.. {
+            if let ProgState::Done = self.emulate_cycle()? {
+                break;
+            }
             self.dump_state(cycle);
         }
 
@@ -85,7 +91,7 @@ impl Cpu {
 
         // return instruction in little-endian
         Ok(u32::from_le_bytes(
-            self.mem.0[pc..pc + 4].try_into().unwrap(),
+            self.mem.0[pc..pc + INSTSIZE_BYTES].try_into().unwrap(),
         ))
     }
 
@@ -175,11 +181,14 @@ impl Cpu {
         Ok(inst)
     }
 
-    fn emulate_cycle(&mut self) -> Result<(), Error> {
+    fn emulate_cycle(&mut self) -> Result<ProgState, Error> {
         let raw_inst = self.fetch()?;
+        if raw_inst == 0 {
+            return Ok(ProgState::Done);
+        }
         let inst = self.decode(raw_inst)?;
         inst.execute(self);
-        Ok(())
+        Ok(ProgState::Continue)
     }
 }
 
@@ -274,7 +283,7 @@ mod tests {
         assert_eq!(cpu.read_reg(29), 5);
         assert_eq!(cpu.read_reg(30) as i32, -32);
         assert_eq!(cpu.read_reg(31) as i32, 42);
-        assert_eq!(cpu.pc, 24);
+        assert_eq!(cpu.pc, 28);
     }
 
     #[test]
@@ -287,7 +296,7 @@ mod tests {
         assert_eq!(cpu.read_reg(29), 5);
         assert_eq!(cpu.read_reg(30) as i32, -123);
         assert_eq!(cpu.read_reg(31), 0);
-        assert_eq!(cpu.pc, 20);
+        assert_eq!(cpu.pc, 24);
     }
     #[test]
     fn load() {
@@ -323,5 +332,34 @@ mod tests {
         assert_eq!(cpu.read_reg(28), 60);
         assert_eq!(cpu.read_reg(30), 60);
         assert_eq!(cpu.mem.0[256], 60);
+    }
+
+    #[test]
+    fn branch_eq() {
+        let program = file_to_bin("branch.s");
+        let mut cpu = Cpu::new();
+
+        assert!(cpu.run(program).is_ok());
+        assert_eq!(cpu.read_reg(20) as i32, -2);
+        assert_eq!(cpu.read_reg(21), 1);
+    }
+
+    #[test]
+    fn branch_signed() {
+        let program = file_to_bin("signed_branch.s");
+        let mut cpu = Cpu::new();
+
+        assert!(cpu.run(program).is_ok());
+        assert_eq!(cpu.read_reg(20) as i32, -1);
+        assert_eq!(cpu.read_reg(21), 1);
+    }
+    #[test]
+    fn branch_unsigned() {
+        let program = file_to_bin("unsigned_branch.s");
+        let mut cpu = Cpu::new();
+
+        assert!(cpu.run(program).is_ok());
+        assert_eq!(cpu.read_reg(20), 100);
+        assert_eq!(cpu.read_reg(21), 100);
     }
 }

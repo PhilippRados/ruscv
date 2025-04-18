@@ -1,5 +1,4 @@
-use crate::cpu::Cpu;
-use crate::cpu::Memory;
+use crate::cpu::*;
 use crate::get_bits;
 use crate::inst_format::*;
 
@@ -137,6 +136,7 @@ impl SInst {
     }
 }
 
+#[derive(Debug)]
 pub enum BInst {
     BEQ,
     BNE,
@@ -182,8 +182,12 @@ impl Inst {
                     BInst::BGE => rs1 as i32 >= rs2 as i32,
                     BInst::BGEU => rs1 >= rs2,
                 };
+                dbg!(inst);
                 if branch {
-                    cpu.pc = u32::wrapping_add(cpu.pc, format.imm)
+                    cpu.pc = u32::wrapping_add(
+                        cpu.pc,
+                        u32::wrapping_sub(format.imm, INSTSIZE_BYTES as u32),
+                    );
                 }
             }
         }
