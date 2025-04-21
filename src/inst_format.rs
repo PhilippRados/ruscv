@@ -181,6 +181,19 @@ impl JFormat {
     }
 }
 
+pub struct UFormat {
+    pub rd: usize,
+    pub imm: u32,
+}
+impl UFormat {
+    pub fn new(raw_inst: u32) -> Self {
+        let rd = get_bits!(raw_inst, 7, 11);
+        let imm = get_bits!(raw_inst, 12, 31, i32) as u32;
+
+        UFormat { rd, imm }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

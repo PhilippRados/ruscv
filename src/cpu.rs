@@ -21,7 +21,7 @@ impl Memory {
 pub struct Cpu {
     regs: [u32; 32],
     pub pc: u32,
-    pub mem: Memory, // should wrap around
+    pub mem: Memory,
 }
 
 impl Cpu {
@@ -153,7 +153,7 @@ impl Cpu {
             0b1100111 => {
                 let i_format = IFormat::new(raw_inst);
                 if let 0x0 = i_format.funct3 {
-                    Inst::I(IInst::Jump, i_format)
+                    Inst::I(IInst::Jalr, i_format)
                 } else {
                     return Err(Error::InvalidInstFormat(Box::new(i_format)));
                 }
@@ -187,6 +187,8 @@ impl Cpu {
                 // jal instruction is only J-Format instruction
                 Inst::J(JFormat::new(raw_inst))
             }
+            0b0110111 => Inst::U(UInst::LUI, UFormat::new(raw_inst)),
+            0b0010111 => Inst::U(UInst::AUIPC, UFormat::new(raw_inst)),
             _ => return Err(Error::InvalidOpcode(opcode)),
         };
 
@@ -284,6 +286,25 @@ mod tests {
         assert_eq!(n as u32, cpu.read_reg(31));
         assert_eq!(0, cpu.read_reg(0));
     }
+
+    #[test]
+    fn auipc_copy() {
+        let program = asm_to_bin("auipc x10, 0\n");
+        let mut cpu = Cpu::new();
+
+        assert!(cpu.run(program).is_ok());
+        assert_eq!(cpu.read_reg(10), 0);
+    }
+
+    #[test]
+    fn auipc_offset() {
+        let program = asm_to_bin("addi x11, x0, 12\nauipc x10, 4\n");
+        let mut cpu = Cpu::new();
+
+        assert!(cpu.run(program).is_ok());
+        assert_eq!(cpu.read_reg(10), 16388);
+    }
+
     #[test]
     fn arithmetic() {
         let program = file_to_bin("arith.s");

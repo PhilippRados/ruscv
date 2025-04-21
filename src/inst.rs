@@ -12,6 +12,7 @@ pub enum Inst {
     S(SInst, SFormat),
     B(BInst, BFormat),
     J(JFormat),
+    U(UInst, UFormat),
 }
 
 pub enum RInst {
@@ -111,7 +112,7 @@ impl MemIInst {
 pub enum IInst {
     Arith(ArithIInst),
     Mem(MemIInst),
-    Jump,
+    Jalr,
 }
 
 pub enum SInst {
@@ -139,7 +140,6 @@ impl SInst {
     }
 }
 
-#[derive(Debug)]
 pub enum BInst {
     BEQ,
     BNE,
@@ -147,6 +147,19 @@ pub enum BInst {
     BGE,
     BLTU,
     BGEU,
+}
+
+pub enum UInst {
+    LUI,
+    AUIPC,
+}
+impl UInst {
+    fn op(self, pc: u32) -> Box<dyn FnOnce(u32) -> u32> {
+        Box::new(move |imm| match self {
+            UInst::LUI => imm << 12,
+            UInst::AUIPC => u32::wrapping_add(pc - 4, imm << 12),
+        })
+    }
 }
 
 impl Inst {
@@ -164,7 +177,7 @@ impl Inst {
                     // Arithmetic operations are the same for R/I format, only the second operand differs.
                     IInst::Arith(inst) => RInst::from(inst).op(),
                     IInst::Mem(inst) => inst.op(&cpu.mem),
-                    IInst::Jump => {
+                    IInst::Jalr => {
                         is_jump = true;
                         Box::new(|_, _| cpu.pc)
                     }
@@ -206,6 +219,11 @@ impl Inst {
                 cpu.pc =
                     u32::wrapping_add(cpu.pc, u32::wrapping_sub(format.imm, INSTSIZE_BYTES as u32));
             }
+            Inst::U(inst, format) => {
+                let alu = inst.op(cpu.pc);
+                let result = alu(format.imm);
+                cpu.write_reg(format.rd, result);
+            }
         }
     }
 }
@@ -230,5 +248,72 @@ mod tests {
         );
         inst.execute(&mut cpu);
         assert_eq!(cpu.mem.0[3], 12);
+    }
+
+    #[test]
+    fn lui() {
+        let mut cpu = Cpu::new();
+
+        let inst = Inst::U(UInst::LUI, UFormat { rd: 10, imm: 1 });
+        inst.execute(&mut cpu);
+        assert_eq!(cpu.read_reg(10), 4096);
+
+        let inst = Inst::U(UInst::LUI, UFormat { rd: 10, imm: 3 });
+        inst.execute(&mut cpu);
+        assert_eq!(cpu.read_reg(10), 12288);
+
+        let inst = Inst::U(UInst::LUI, UFormat { rd: 10, imm: 0x100 });
+        inst.execute(&mut cpu);
+        assert_eq!(cpu.read_reg(10), 1048576);
+    }
+
+    #[test]
+    fn lui_max() {
+        let mut cpu = Cpu::new();
+        let inst = Inst::U(
+            UInst::LUI,
+            UFormat {
+                rd: 10,
+                imm: 0b1111_1111_1111_1111,
+            },
+        );
+        inst.execute(&mut cpu);
+        assert_eq!(cpu.read_reg(10), 0b1111_1111_1111_1111_0000_0000_0000);
+    }
+
+    #[test]
+    fn long_jump() {
+        // manually test really big addresses, since emulator only has little memory.
+        // auipc x5, 0x03000
+        // jalr x10, x5, -0x400
+
+        let mut cpu = Cpu::new();
+        // pc was already incremented by fetch so emulate that.
+        cpu.pc = 0x40000004;
+        let auipc_inst = Inst::U(
+            UInst::AUIPC,
+            UFormat {
+                rd: 5,
+                imm: 0x03000,
+            },
+        );
+        auipc_inst.execute(&mut cpu);
+        assert_eq!(cpu.read_reg(5), 0x43000000);
+
+        // manually increment pc since no fetch phase
+        cpu.pc += 4;
+
+        let jalr_inst = Inst::I(
+            IInst::Jalr,
+            IFormat {
+                rd: 10,
+                funct3: 0,
+                rs1: 5,
+                imm: -0x400i32 as u32,
+            },
+        );
+        jalr_inst.execute(&mut cpu);
+        assert_eq!(cpu.read_reg(10), 0x40000008);
+        assert_eq!(cpu.pc, 0x42fffc00);
     }
 }
