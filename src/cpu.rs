@@ -374,4 +374,14 @@ mod tests {
         assert_eq!(cpu.read_reg(20), 100);
         assert_eq!(cpu.read_reg(21), 100);
     }
+
+    #[test]
+    fn fibonacci() {
+        let program = file_to_bin("fibs.s");
+        let mut cpu = Cpu::new();
+
+        assert!(cpu.run(program).is_ok());
+        //  fibs(10) == a0 == r10 == 55
+        assert_eq!(cpu.read_reg(10), 55);
+    }
 }
