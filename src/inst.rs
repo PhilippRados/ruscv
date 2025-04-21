@@ -13,6 +13,7 @@ pub enum Inst {
     B(BInst, BFormat),
     J(JFormat),
     U(UInst, UFormat),
+    Nop,
 }
 
 pub enum RInst {
@@ -99,11 +100,30 @@ impl MemIInst {
         Box::new(move |rs1, imm| {
             let from = u32::wrapping_add(rs1, imm);
             let to = u32::wrapping_add(from, size_bytes);
-            let value = mem[from as usize..to as usize].try_into().unwrap();
-            if zero_extends {
-                u32::from_le_bytes(value)
-            } else {
-                i32::from_le_bytes(value) as u32
+            // dbg!(from);
+            // dbg!(to);
+            match (zero_extends, size_bytes) {
+                (true, 1) => {
+                    u8::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap()) as u32
+                }
+                (true, 2) => {
+                    u16::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap()) as u32
+                }
+                (true, 4) => {
+                    u32::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap())
+                }
+                (false, 1) => {
+                    i8::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap()) as i32
+                        as u32
+                }
+                (false, 2) => {
+                    i16::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap()) as i32
+                        as u32
+                }
+                (false, 4) => {
+                    i32::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap()) as u32
+                }
+                _ => unreachable!(),
             }
         })
     }
@@ -224,6 +244,7 @@ impl Inst {
                 let result = alu(format.imm);
                 cpu.write_reg(format.rd, result);
             }
+            Inst::Nop => {}
         }
     }
 }

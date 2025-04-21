@@ -3,7 +3,7 @@ use crate::get_bits;
 use crate::inst::*;
 use crate::inst_format::*;
 
-const MEMSIZE: usize = 1024;
+const MEMSIZE: usize = 1024 * 128;
 pub const INSTSIZE_BYTES: usize = 4;
 
 enum ProgState {
@@ -44,9 +44,10 @@ impl Cpu {
             if let ProgState::Done = self.emulate_cycle()? {
                 break;
             }
-            self.dump_state(cycle);
+            // self.dump_state(cycle);
         }
 
+        eprintln!("Emulator ran out of instructions!");
         Ok(())
     }
 
@@ -86,7 +87,7 @@ impl Cpu {
         let pc = self.pc as usize;
         self.pc += INSTSIZE_BYTES as u32;
         if pc > MEMSIZE - INSTSIZE_BYTES {
-            return Err(Error::InvalidPC);
+            return Err(Error::InvalidPC(pc, MEMSIZE));
         }
 
         // return instruction in little-endian
@@ -189,6 +190,16 @@ impl Cpu {
             }
             0b0110111 => Inst::U(UInst::LUI, UFormat::new(raw_inst)),
             0b0010111 => Inst::U(UInst::AUIPC, UFormat::new(raw_inst)),
+            0b1110011 => {
+                // ecall
+                if self.regs[17] == 93 {
+                    // intercept exit syscall (a7 == 93) to check risc-v tests
+                    eprintln!("Finished at exit syscall with exit code: {}", self.regs[10]);
+                    std::process::exit(self.regs[10] as i32);
+                }
+                Inst::Nop
+            }
+            0b0001111 => Inst::Nop,
             _ => return Err(Error::InvalidOpcode(opcode)),
         };
 
@@ -200,6 +211,7 @@ impl Cpu {
         if raw_inst == 0 {
             return Ok(ProgState::Done);
         }
+        // eprintln!("{:b}", raw_inst);
         let inst = self.decode(raw_inst)?;
         inst.execute(self);
         Ok(ProgState::Continue)
@@ -337,9 +349,11 @@ mod tests {
         let mut cpu = Cpu::new();
 
         assert!(cpu.run(program).is_ok());
+        assert_eq!(cpu.read_reg(27), 60);
         assert_eq!(cpu.read_reg(30), 60);
+        assert_eq!(cpu.read_reg(29), 60);
         assert_eq!(cpu.read_reg(28), 60);
-        assert_eq!(cpu.mem.0[20], 60);
+        assert_eq!(cpu.mem.0[64], 60);
     }
 
     #[test]
