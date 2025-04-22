@@ -11,7 +11,7 @@ _start:
 	lw	ra,12(sp)
 	lw	s0,8(sp)
 	addi	sp,sp,16
-	j end
+	j exit
 
 fib:
 	addi	sp,sp,-32
@@ -48,4 +48,6 @@ fib:
 	addi	sp,sp,32
 	jr	ra
 
-end:
+exit:
+	li	a7,93
+  ecall

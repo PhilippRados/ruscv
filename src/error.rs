@@ -4,6 +4,7 @@ pub enum Error {
     InvalidOpcode(usize),
     InvalidInstFormat(Box<dyn fmt::Display>),
     InvalidPC(usize, usize),
+    EndOfInstructions,
 }
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -16,6 +17,7 @@ impl fmt::Debug for Error {
                 Error::InvalidPC(pc, memsize) => format!(
                     "Program counter (pc: {pc}) bigger than than memory (memsize: {memsize}B)"
                 ),
+                Error::EndOfInstructions => "Program ran out of instructions!".to_string(),
             }
         )
     }

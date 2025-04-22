@@ -13,6 +13,14 @@ pub enum Inst {
     B(BInst, BFormat),
     J(JFormat),
     U(UInst, UFormat),
+
+    // This isn't an official instruction but just so that the emulator doesn't crash on `ecall`.
+    // Only handles exit for now, every other syscall is ignored.
+    SysCall(SysCall),
+}
+
+pub enum SysCall {
+    Exit(u8),
     Nop,
 }
 
@@ -244,7 +252,7 @@ impl Inst {
                 let result = alu(format.imm);
                 cpu.write_reg(format.rd, result);
             }
-            Inst::Nop => {}
+            Inst::SysCall(..) => {}
         }
     }
 }

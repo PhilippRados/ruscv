@@ -8,7 +8,7 @@ pub const INSTSIZE_BYTES: usize = 4;
 
 enum ProgState {
     Continue,
-    Done,
+    Exit(u8),
 }
 
 pub struct Memory(pub [u8; MEMSIZE]);
@@ -37,18 +37,17 @@ impl Cpu {
         }
     }
 
-    pub fn run(&mut self, program: Vec<u8>) -> Result<(), Error> {
+    pub fn run(&mut self, program: Vec<u8>) -> Result<u8, Error> {
         self.load_program(program);
 
         for cycle in 0.. {
-            if let ProgState::Done = self.emulate_cycle()? {
-                break;
+            if let ProgState::Exit(code) = self.emulate_cycle()? {
+                return Ok(code);
             }
-            // self.dump_state(cycle);
+            self.dump_state(cycle);
         }
 
-        eprintln!("Emulator ran out of instructions!");
-        Ok(())
+        unreachable!("Emulator should either run out of instructions or exit using syscall")
     }
 
     pub fn read_reg(&self, reg_idx: usize) -> u32 {
@@ -192,14 +191,18 @@ impl Cpu {
             0b0010111 => Inst::U(UInst::AUIPC, UFormat::new(raw_inst)),
             0b1110011 => {
                 // ecall
-                if self.regs[17] == 93 {
-                    // intercept exit syscall (a7 == 93) to check risc-v tests
-                    eprintln!("Finished at exit syscall with exit code: {}", self.regs[10]);
-                    std::process::exit(self.regs[10] as i32);
-                }
-                Inst::Nop
+                let call = if self.regs[17] == 93 {
+                    // intercept exit syscall (a7 == 93) to check official risc-v testsuite
+                    SysCall::Exit(self.regs[10] as u8)
+                } else {
+                    SysCall::Nop
+                };
+                Inst::SysCall(call)
             }
-            0b0001111 => Inst::Nop,
+            0b0001111 => {
+                // fence
+                Inst::SysCall(SysCall::Nop)
+            }
             _ => return Err(Error::InvalidOpcode(opcode)),
         };
 
@@ -209,10 +212,13 @@ impl Cpu {
     fn emulate_cycle(&mut self) -> Result<ProgState, Error> {
         let raw_inst = self.fetch()?;
         if raw_inst == 0 {
-            return Ok(ProgState::Done);
+            return Err(Error::EndOfInstructions);
         }
-        // eprintln!("{:b}", raw_inst);
+        eprintln!("{:b}", raw_inst);
         let inst = self.decode(raw_inst)?;
+        if let Inst::SysCall(SysCall::Exit(code)) = inst {
+            return Ok(ProgState::Exit(code));
+        }
         inst.execute(self);
         Ok(ProgState::Continue)
     }
@@ -224,6 +230,9 @@ mod tests {
     use std::io::Write;
     use std::path::Path;
     use std::process::Command;
+
+    // NOTE: The testcases in tests/ terminate by running out of instructions.
+    // This is by design, as I don't want to exit each testcase using ecall.
 
     fn file_to_bin(path: &'static str) -> Vec<u8> {
         let mut current_path = std::env::current_dir().unwrap();
@@ -304,7 +313,7 @@ mod tests {
         let program = asm_to_bin("auipc x10, 0\n");
         let mut cpu = Cpu::new();
 
-        assert!(cpu.run(program).is_ok());
+        assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(10), 0);
     }
 
@@ -313,7 +322,7 @@ mod tests {
         let program = asm_to_bin("addi x11, x0, 12\nauipc x10, 4\n");
         let mut cpu = Cpu::new();
 
-        assert!(cpu.run(program).is_ok());
+        assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(10), 16388);
     }
 
@@ -322,7 +331,7 @@ mod tests {
         let program = file_to_bin("arith.s");
         let mut cpu = Cpu::new();
 
-        assert!(cpu.run(program).is_ok());
+        assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(27) as i32, -26);
         assert_eq!(cpu.read_reg(28) as i32, -6);
         assert_eq!(cpu.read_reg(29), 5);
@@ -336,7 +345,7 @@ mod tests {
         let program = file_to_bin("bitops.s");
         let mut cpu = Cpu::new();
 
-        assert!(cpu.run(program).is_ok());
+        assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(28) as i32, 1);
         assert_eq!(cpu.read_reg(29), 5);
         assert_eq!(cpu.read_reg(30) as i32, -123);
@@ -348,7 +357,7 @@ mod tests {
         let program = file_to_bin("load.s");
         let mut cpu = Cpu::new();
 
-        assert!(cpu.run(program).is_ok());
+        assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(27), 60);
         assert_eq!(cpu.read_reg(30), 60);
         assert_eq!(cpu.read_reg(29), 60);
@@ -361,7 +370,7 @@ mod tests {
         let program = file_to_bin("negative_load.s");
         let mut cpu = Cpu::new();
 
-        assert!(cpu.run(program).is_ok());
+        assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(27), 21);
         assert_eq!(cpu.read_reg(28), 60);
         assert_eq!(cpu.read_reg(30), 60);
@@ -373,7 +382,7 @@ mod tests {
         let program = file_to_bin("negative_store.s");
         let mut cpu = Cpu::new();
 
-        assert!(cpu.run(program).is_ok());
+        assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(22), 261);
         assert_eq!(cpu.read_reg(27), 256);
         assert_eq!(cpu.read_reg(28), 60);
@@ -386,7 +395,7 @@ mod tests {
         let program = file_to_bin("branch.s");
         let mut cpu = Cpu::new();
 
-        assert!(cpu.run(program).is_ok());
+        assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(20) as i32, -2);
         assert_eq!(cpu.read_reg(21), 1);
     }
@@ -396,7 +405,7 @@ mod tests {
         let program = file_to_bin("signed_branch.s");
         let mut cpu = Cpu::new();
 
-        assert!(cpu.run(program).is_ok());
+        assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(20) as i32, -1);
         assert_eq!(cpu.read_reg(21), 1);
     }
@@ -405,7 +414,7 @@ mod tests {
         let program = file_to_bin("unsigned_branch.s");
         let mut cpu = Cpu::new();
 
-        assert!(cpu.run(program).is_ok());
+        assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(20), 100);
         assert_eq!(cpu.read_reg(21), 100);
     }
@@ -415,6 +424,7 @@ mod tests {
         let program = file_to_bin("fibs.s");
         let mut cpu = Cpu::new();
 
+        // fibonacci terminates using exit syscall which is why result is Ok.
         assert!(cpu.run(program).is_ok());
         //  fibs(10) == a0 == r10 == 55
         assert_eq!(cpu.read_reg(10), 55);

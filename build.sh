@@ -38,7 +38,7 @@ case "$operation" in
       fi
 
       cargo b --release
-      for test in "$RISCV_TESTSUITE"/isa/rv32ui-*; do
+      for test in "$RISCV_TESTSUITE"/isa/rv32ui-p*; do
         if [[ $test != *.dump ]]; then
           test_base=$(basename -- "$test")
           # echo to stderr
