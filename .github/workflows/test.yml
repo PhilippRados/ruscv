@@ -22,5 +22,18 @@ jobs:
           sudo apt update
           sudo apt install gcc-riscv64-unknown-elf
 
-      - name: unit tests
+      - name: Install riscv-testsuite
+        run: |
+          git clone https://github.com/riscv/riscv-tests
+          cd riscv-tests
+          git submodule update --init --recursive
+          autoconf
+          ./configure
+          make
+          make install
+
+      - name: Unit tests
         run: cargo t
+
+      - name: Official riscv-tests
+        run: RISCV_TESTSUITE=$HOME/riscv-tests ./build.sh riscv-testsuite
