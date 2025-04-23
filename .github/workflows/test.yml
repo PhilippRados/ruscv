@@ -28,7 +28,7 @@ jobs:
           cd riscv-tests
           git submodule update --init --recursive
           autoconf
-          ./configure
+          ./configure --prefix=/usr --target=riscv64-unknown-elf
           make
           make install
 
