@@ -1,14 +1,10 @@
-name: Unit tests
+name: Tests
 
 on: [push, pull_request]
 
 jobs:
   test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-13, macos-latest]
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -20,6 +16,9 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+
+      - name: Install risc-v toolchain
+        uses: colinaaa/setup-riscv-gnu-toolchain@latest
 
       - name: unit tests
         run: cargo t
