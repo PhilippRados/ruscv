@@ -33,20 +33,33 @@ case "$operation" in
         ;;
     riscv-testsuite)
       if [ -z "$RISCV_TESTSUITE" ]; then
-        echo "RISCV_TESTSUITE is not set"
+        echo "RISCV_TESTSUITE env var is not set"
         exit 1
       fi
 
       cargo b --release
+      FAILED=0
+      FAILED_TESTS=""
       for test in "$RISCV_TESTSUITE"/isa/rv32ui-p*; do
         if [[ $test != *.dump ]]; then
           test_base=$(basename -- "$test")
           # echo to stderr
           >&2 echo "Testing $test_base..."
           riscv64-unknown-elf-objcopy -O binary $test "tests/$test_base.bin"
-          ./target/release/ruscv "tests/$test_base.bin"
+
+          # capture the emulators stderr messages to check if program finished successfully (exit-code 0)
+          stderr=$(./target/release/ruscv "tests/$test_base.bin" 2>&1)
+          if [ "$stderr" != "Emulated program finished at exit syscall with exit-code: 0" ]; then
+            let "FAILED += 1"
+            FAILED_TESTS="${FAILED_TESTS}\n- ${test_base}"
+          fi
         fi
       done
+      echo "Failed ${FAILED} tests:"
+      echo -e "${FAILED_TESTS}"
+      if [ $FAILED -gt 0 ]; then
+        exit 1
+      fi
       ;;
     objdump)
         riscv64-unknown-elf-objdump -D "$filepath" -march=rv32i -mabi=ilp32
