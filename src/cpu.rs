@@ -44,7 +44,7 @@ impl Cpu {
             if let ProgState::Exit(code) = self.emulate_cycle()? {
                 return Ok(code);
             }
-            self.dump_state(cycle);
+            // self.dump_state(cycle);
         }
 
         unreachable!("Emulator should either run out of instructions or exit using syscall")
@@ -214,7 +214,7 @@ impl Cpu {
         if raw_inst == 0 {
             return Err(Error::EndOfInstructions);
         }
-        eprintln!("{:b}", raw_inst);
+        // eprintln!("{:b}", raw_inst);
         let inst = self.decode(raw_inst)?;
         if let Inst::SysCall(SysCall::Exit(code)) = inst {
             return Ok(ProgState::Exit(code));

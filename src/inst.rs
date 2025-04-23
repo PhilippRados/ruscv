@@ -200,23 +200,20 @@ impl Inst {
                 cpu.write_reg(format.rd, result);
             }
             Inst::I(inst, format) => {
-                let mut is_jump = false;
+                let rs1 = cpu.read_reg(format.rs1);
                 let alu = match inst {
                     // Arithmetic operations are the same for R/I format, only the second operand differs.
                     IInst::Arith(inst) => RInst::from(inst).op(),
                     IInst::Mem(inst) => inst.op(&cpu.mem),
-                    IInst::Jalr => {
-                        is_jump = true;
-                        Box::new(|_, _| cpu.pc)
-                    }
+                    IInst::Jalr => Box::new(|rs1, imm| {
+                        let original_pc = cpu.pc;
+                        cpu.pc = u32::wrapping_add(rs1, imm);
+                        original_pc
+                    }),
                 };
 
-                let result = alu(cpu.read_reg(format.rs1), format.imm);
+                let result = alu(rs1, format.imm);
                 cpu.write_reg(format.rd, result);
-
-                if is_jump {
-                    cpu.pc = u32::wrapping_add(cpu.read_reg(format.rs1), format.imm);
-                }
             }
             Inst::S(inst, format) => {
                 let rs1 = cpu.read_reg(format.rs1);
