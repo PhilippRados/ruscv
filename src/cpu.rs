@@ -196,7 +196,7 @@ impl Cpu {
                 Inst::B(inst, b_format)
             }
             0b1101111 => {
-                // jal instruction is only J-Format instruction
+                // jal instruction is the only J-Format instruction
                 Inst::J(JFormat::new(raw_inst))
             }
             0b0110111 => Inst::U(UInst::LUI, UFormat::new(raw_inst)),
@@ -212,7 +212,7 @@ impl Cpu {
                 Inst::SysCall(call)
             }
             0b0001111 => {
-                // fence
+                // fence (also necessary for riscv-tests)
                 Inst::SysCall(SysCall::Nop)
             }
             _ => return Err(Error::InvalidOpcode(opcode)),

@@ -37,8 +37,8 @@ pub enum RInst {
     SLTU,
 }
 impl RInst {
-    fn op(self) -> Box<dyn FnOnce(u32, u32) -> u32> {
-        Box::new(match self {
+    fn op(self) -> impl FnOnce(u32, u32) -> u32 {
+        match self {
             RInst::ADD => u32::wrapping_add,
             RInst::SUB => u32::wrapping_sub,
             RInst::XOR => u32::bitxor,
@@ -58,7 +58,7 @@ impl RInst {
             },
             RInst::SLT => |rs1, rs2| ((rs1 as i32) < (rs2 as i32)) as u32,
             RInst::SLTU => |rs1, rs2| (rs1 < rs2) as u32,
-        })
+        }
     }
 }
 impl From<ArithIInst> for RInst {
@@ -97,7 +97,7 @@ pub enum MemIInst {
     LHU,
 }
 impl MemIInst {
-    fn op(self, mem: &Memory) -> Box<dyn FnOnce(u32, u32) -> u32 + '_> {
+    fn op(self, mem: &Memory) -> impl FnOnce(u32, u32) -> u32 + '_ {
         let size_bytes = match &self {
             MemIInst::LB | MemIInst::LBU => 1,
             MemIInst::LH | MemIInst::LHU => 2,
@@ -105,11 +105,9 @@ impl MemIInst {
         };
         let mem = &mem.0;
         let zero_extends = matches!(self, MemIInst::LBU | MemIInst::LHU);
-        Box::new(move |rs1, imm| {
+        move |rs1, imm| {
             let from = u32::wrapping_add(rs1, imm);
             let to = u32::wrapping_add(from, size_bytes);
-            // dbg!(from);
-            // dbg!(to);
             match (zero_extends, size_bytes) {
                 (true, 1) => {
                     u8::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap()) as u32
@@ -133,7 +131,7 @@ impl MemIInst {
                 }
                 _ => unreachable!(),
             }
-        })
+        }
     }
 }
 
@@ -141,6 +139,20 @@ pub enum IInst {
     Arith(ArithIInst),
     Mem(MemIInst),
     Jalr,
+}
+impl IInst {
+    fn op(self, cpu: &mut Cpu) -> Box<dyn FnOnce(u32, u32) -> u32 + '_> {
+        match self {
+            // Arithmetic operations are the same for R/I format, only the second operand differs.
+            IInst::Arith(inst) => Box::new(RInst::from(inst).op()),
+            IInst::Mem(inst) => Box::new(inst.op(&cpu.mem)),
+            IInst::Jalr => Box::new(|rs1, imm| {
+                let original_pc = cpu.pc;
+                cpu.pc = u32::wrapping_add(rs1, imm);
+                original_pc
+            }),
+        }
+    }
 }
 
 pub enum SInst {
@@ -150,21 +162,21 @@ pub enum SInst {
 }
 
 impl SInst {
-    fn op(self, mem: &mut Memory) -> Box<dyn FnOnce(u32, u32, u32) + '_> {
+    fn op(self, mem: &mut Memory) -> impl FnOnce(u32, u32, u32) + '_ {
         let size_bytes: usize = match &self {
             SInst::SB => 1,
             SInst::SH => 2,
             SInst::SW => 4,
         };
 
-        Box::new(move |rs1, rs2, imm| {
+        move |rs1, rs2, imm| {
             let base = u32::wrapping_add(rs1, imm);
             for i in 0..size_bytes {
                 let address = u32::wrapping_add(base, i as u32);
                 let bit_offset = i * 8;
                 mem.0[address as usize] = get_bits!(rs2, bit_offset, bit_offset + 7) as u8;
             }
-        })
+        }
     }
 }
 
@@ -182,17 +194,16 @@ pub enum UInst {
     AUIPC,
 }
 impl UInst {
-    fn op(self, pc: u32) -> Box<dyn FnOnce(u32) -> u32> {
-        Box::new(move |imm| match self {
+    fn op(self, pc: u32) -> impl FnOnce(u32) -> u32 {
+        move |imm| match self {
             UInst::LUI => imm << 12,
             UInst::AUIPC => u32::wrapping_add(pc - 4, imm << 12),
-        })
+        }
     }
 }
 
 impl Inst {
     pub fn execute(self, cpu: &mut Cpu) {
-        // TODO: Do these actually have to be closures? Why not compute values directly
         match self {
             Inst::R(inst, format) => {
                 let alu = inst.op();
@@ -201,17 +212,7 @@ impl Inst {
             }
             Inst::I(inst, format) => {
                 let rs1 = cpu.read_reg(format.rs1);
-                let alu = match inst {
-                    // Arithmetic operations are the same for R/I format, only the second operand differs.
-                    IInst::Arith(inst) => RInst::from(inst).op(),
-                    IInst::Mem(inst) => inst.op(&cpu.mem),
-                    IInst::Jalr => Box::new(|rs1, imm| {
-                        let original_pc = cpu.pc;
-                        cpu.pc = u32::wrapping_add(rs1, imm);
-                        original_pc
-                    }),
-                };
-
+                let alu = inst.op(cpu);
                 let result = alu(rs1, format.imm);
                 cpu.write_reg(format.rd, result);
             }
