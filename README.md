@@ -27,3 +27,4 @@ This requires the environment variable `RISCV_TESTSUITE` to point to the install
 
 ## Todo
 - [ ] It would be nice to have some working syscalls to interact with the outside world.
+- [ ] Run some bigger real-world programs (linux seems to be the thing people like to try but that seems out of scope for this small project).
