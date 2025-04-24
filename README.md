@@ -25,6 +25,12 @@ $ RISCV_TESTSUITE=<path-to-folder> ./build.sh riscv-testsuite
 ```
 This requires the environment variable `RISCV_TESTSUITE` to point to the installation path of the testsuite.
 
+## Resources
+These resources helped me during development (aside from the [docs](docs/)).
+- Encode/Decode binary instructions: https://luplab.gitlab.io/rvcodecjs/
+- RISC-V instructions explained: https://projectf.io/posts/riscv-cheat-sheet/
+- Online emulator to test against: https://www.cs.cornell.edu/courses/cs3410/2019sp/riscv/interpreter/
+
 ## Todo
 - [ ] It would be nice to have some working syscalls to interact with the outside world.
 - [ ] Run some bigger real-world programs (linux seems to be the thing people like to try but that seems out of scope for this small project).
