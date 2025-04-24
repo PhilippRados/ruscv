@@ -228,7 +228,7 @@ impl Cpu {
             return Err(Error::EndOfInstructions);
         }
         if self.print_debug {
-            eprintln!("Inst: {:b}", raw_inst);
+            eprintln!("Inst: {:032b}", raw_inst);
         }
 
         let inst = self.decode(raw_inst)?;

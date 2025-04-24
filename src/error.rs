@@ -20,22 +20,22 @@ impl fmt::Debug for Error {
             f,
             "{}",
             match self {
-                Error::InvalidOpcode(opcode) => format!("invalid opcode: {:b}", opcode),
+                Error::InvalidOpcode(opcode) => format!("invalid opcode: {:07b}", opcode),
                 Error::InvalidInstFormat(kind) => match kind {
                     FormatError::R(format) => format!(
-                        "invalid R-format instruction: funct3: '{:b}', funct7: '{:b}'",
+                        "invalid R-format instruction: funct3: '{:03b}', funct7: '{:07b}'",
                         format.funct3, format.funct7
                     ),
                     FormatError::I(format) => format!(
-                        "invalid I-format instruction: funct3: '{:b}'",
+                        "invalid I-format instruction: funct3: '{:03b}'",
                         format.funct3
                     ),
                     FormatError::S(format) => format!(
-                        "invalid S-format instruction: funct3: '{:b}'",
+                        "invalid S-format instruction: funct3: '{:03b}'",
                         format.funct3
                     ),
                     FormatError::B(format) => format!(
-                        "invalid B-format instruction: funct3: '{:b}'",
+                        "invalid B-format instruction: funct3: '{:03b}'",
                         format.funct3
                     ),
                 },
