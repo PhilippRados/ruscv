@@ -43,9 +43,16 @@ impl Cpu {
         self.load_program(program);
 
         for cycle in 0.. {
-            if let ProgState::Exit(code) = self.emulate_cycle()? {
-                self.dump_state(cycle);
-                return Ok(code);
+            match self.emulate_cycle() {
+                Ok(ProgState::Exit(code)) => {
+                    self.dump_state(cycle);
+                    return Ok(code);
+                }
+                Err(e) => {
+                    self.dump_state(cycle);
+                    return Err(e);
+                }
+                _ => (),
             }
             if self.print_debug {
                 self.dump_state(cycle);

@@ -17,7 +17,9 @@ impl fmt::Debug for Error {
                 Error::InvalidPC(pc, memsize) => format!(
                     "Program counter (pc: {pc}) bigger than than memory (memsize: {memsize}B)"
                 ),
-                Error::EndOfInstructions => "Program ran out of instructions!".to_string(),
+                Error::EndOfInstructions =>
+                    "Program ran out of instructions! Use exit syscall to terminate gracefully."
+                        .to_string(),
             }
         )
     }
