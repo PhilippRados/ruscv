@@ -3,6 +3,13 @@
 This is a small emulator that implements the basic rv32i isa based on the references in [docs](docs).
 It passes all the rv32ui-p* test cases in the official [riscv-tests](https://github.com/riscv-software-src/riscv-tests).
 
+## Installation
+I haven't published it to crates.io since this is just a toy project. But if you want to run it for yourself you can do so by:
+```bash
+$ cargo install --git https://github.com/PhilippRados/ruscv.git
+```
+Or just clone this repo and build from source.
+
 ## Usage
 The emulator expects a raw binary file and starts executing it at address 0.
 The emulator stops when there it encounters an exit syscall (ecall with a7 = 93) or when it runs out of instructions (ie. inst is all zeros). 
