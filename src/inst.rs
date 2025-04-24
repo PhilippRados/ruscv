@@ -96,6 +96,11 @@ pub enum MemIInst {
     LBU,
     LHU,
 }
+macro_rules! load_mem {
+    ($ty:ty,$mem:expr,$from:expr,$to:expr) => {
+        <$ty>::from_le_bytes($mem[$from as usize..$to as usize].try_into().unwrap()) as u32
+    };
+}
 impl MemIInst {
     fn op(self, mem: &Memory) -> impl FnOnce(u32, u32) -> u32 + '_ {
         let size_bytes = match &self {
@@ -104,32 +109,15 @@ impl MemIInst {
             MemIInst::LW => 4,
         };
         let mem = &mem.0;
-        let zero_extends = matches!(self, MemIInst::LBU | MemIInst::LHU);
         move |rs1, imm| {
             let from = u32::wrapping_add(rs1, imm);
             let to = u32::wrapping_add(from, size_bytes);
-            match (zero_extends, size_bytes) {
-                (true, 1) => {
-                    u8::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap()) as u32
-                }
-                (true, 2) => {
-                    u16::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap()) as u32
-                }
-                (true, 4) => {
-                    u32::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap())
-                }
-                (false, 1) => {
-                    i8::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap()) as i32
-                        as u32
-                }
-                (false, 2) => {
-                    i16::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap()) as i32
-                        as u32
-                }
-                (false, 4) => {
-                    i32::from_le_bytes(mem[from as usize..to as usize].try_into().unwrap()) as u32
-                }
-                _ => unreachable!(),
+            match self {
+                MemIInst::LBU => load_mem!(u8, mem, from, to),
+                MemIInst::LHU => load_mem!(u16, mem, from, to),
+                MemIInst::LW => load_mem!(u32, mem, from, to),
+                MemIInst::LB => load_mem!(i8, mem, from, to),
+                MemIInst::LH => load_mem!(i16, mem, from, to),
             }
         }
     }
