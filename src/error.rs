@@ -2,7 +2,7 @@ use std::fmt;
 
 pub enum Error {
     InvalidOpcode(usize),
-    InvalidInstFormat(Box<dyn fmt::Display>),
+    InvalidInstFormat(String),
     InvalidPC(usize, usize),
     EndOfInstructions,
 }
@@ -13,12 +13,12 @@ impl fmt::Debug for Error {
             "{}",
             match self {
                 Error::InvalidOpcode(opcode) => format!("invalid opcode: {:b}", opcode),
-                Error::InvalidInstFormat(format) => format.to_string(),
+                Error::InvalidInstFormat(format) => format.clone(),
                 Error::InvalidPC(pc, memsize) => format!(
-                    "Program counter (pc: {pc}) bigger than than memory (memsize: {memsize}B)"
+                    "program counter (pc: {pc}) bigger than than memory (memsize: {memsize}B)"
                 ),
                 Error::EndOfInstructions =>
-                    "Program ran out of instructions! Use exit syscall to terminate gracefully."
+                    "program ran out of instructions! Use exit syscall to terminate gracefully."
                         .to_string(),
             }
         )

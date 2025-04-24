@@ -34,7 +34,7 @@ impl CliArgs {
             }
         }
         if cli_args.filename.is_empty() {
-            eprintln!("Error: ruscv requires exactly one input file");
+            eprintln!("Error: ruscv requires exactly one binary input file");
             eprintln!("Usage: ruscv [-debug] <file>");
             std::process::exit(1);
         }

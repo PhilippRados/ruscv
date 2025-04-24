@@ -55,10 +55,12 @@ case "$operation" in
           fi
         fi
       done
-      echo "Failed ${FAILED} tests:"
-      echo -e "${FAILED_TESTS}"
       if [ $FAILED -gt 0 ]; then
+        echo "Failed ${FAILED} tests:"
+        echo -e "${FAILED_TESTS}"
         exit 1
+      else
+        echo "Passed all tests!"
       fi
       ;;
     objdump)

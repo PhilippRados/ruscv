@@ -126,7 +126,7 @@ impl Cpu {
                     (0x5, 0x20) => RInst::SRA,
                     (0x2, 0x00) => RInst::SLT,
                     (0x3, 0x00) => RInst::SLTU,
-                    _ => return Err(Error::InvalidInstFormat(Box::new(r_format))),
+                    _ => return Err(Error::InvalidInstFormat(r_format.to_string())),
                 };
 
                 Inst::R(inst, r_format)
@@ -144,7 +144,7 @@ impl Cpu {
                     (0x5, 0x20) => ArithIInst::SRAI,
                     (0x2, _) => ArithIInst::SLTI,
                     (0x3, _) => ArithIInst::SLTIU,
-                    _ => return Err(Error::InvalidInstFormat(Box::new(i_format))),
+                    _ => return Err(Error::InvalidInstFormat(i_format.to_string())),
                 };
 
                 Inst::I(IInst::Arith(inst), i_format)
@@ -157,7 +157,7 @@ impl Cpu {
                     0x2 => MemIInst::LW,
                     0x4 => MemIInst::LBU,
                     0x5 => MemIInst::LHU,
-                    _ => return Err(Error::InvalidInstFormat(Box::new(i_format))),
+                    _ => return Err(Error::InvalidInstFormat(i_format.to_string())),
                 };
 
                 Inst::I(IInst::Mem(inst), i_format)
@@ -167,7 +167,7 @@ impl Cpu {
                 if let 0x0 = i_format.funct3 {
                     Inst::I(IInst::Jalr, i_format)
                 } else {
-                    return Err(Error::InvalidInstFormat(Box::new(i_format)));
+                    return Err(Error::InvalidInstFormat(i_format.to_string()));
                 }
             }
             0b0100011 => {
@@ -176,7 +176,7 @@ impl Cpu {
                     0x0 => SInst::SB,
                     0x1 => SInst::SH,
                     0x2 => SInst::SW,
-                    _ => return Err(Error::InvalidInstFormat(Box::new(s_format))),
+                    _ => return Err(Error::InvalidInstFormat(s_format.to_string())),
                 };
 
                 Inst::S(inst, s_format)
@@ -190,7 +190,7 @@ impl Cpu {
                     0x5 => BInst::BGE,
                     0x6 => BInst::BLTU,
                     0x7 => BInst::BGEU,
-                    _ => return Err(Error::InvalidInstFormat(Box::new(b_format))),
+                    _ => return Err(Error::InvalidInstFormat(b_format.to_string())),
                 };
 
                 Inst::B(inst, b_format)
