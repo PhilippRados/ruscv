@@ -1,10 +1,18 @@
 use std::fmt;
 
+use crate::inst_format::{BFormat, IFormat, RFormat, SFormat};
+
 pub enum Error {
     InvalidOpcode(usize),
-    InvalidInstFormat(String),
+    InvalidInstFormat(FormatError),
     InvalidPC(usize, usize),
     EndOfInstructions,
+}
+pub enum FormatError {
+    R(RFormat),
+    I(IFormat),
+    S(SFormat),
+    B(BFormat),
 }
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -13,7 +21,24 @@ impl fmt::Debug for Error {
             "{}",
             match self {
                 Error::InvalidOpcode(opcode) => format!("invalid opcode: {:b}", opcode),
-                Error::InvalidInstFormat(format) => format.clone(),
+                Error::InvalidInstFormat(kind) => match kind {
+                    FormatError::R(format) => format!(
+                        "invalid R-format instruction: funct3: '{:b}', funct7: '{:b}'",
+                        format.funct3, format.funct7
+                    ),
+                    FormatError::I(format) => format!(
+                        "invalid I-format instruction: funct3: '{:b}'",
+                        format.funct3
+                    ),
+                    FormatError::S(format) => format!(
+                        "invalid S-format instruction: funct3: '{:b}'",
+                        format.funct3
+                    ),
+                    FormatError::B(format) => format!(
+                        "invalid B-format instruction: funct3: '{:b}'",
+                        format.funct3
+                    ),
+                },
                 Error::InvalidPC(pc, memsize) => format!(
                     "program counter (pc: {pc}) bigger than than memory (memsize: {memsize}B)"
                 ),

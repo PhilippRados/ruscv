@@ -1,5 +1,3 @@
-use std::fmt;
-
 // extracts inclusive range of bits from integer, can be sign- or zero-extended depending on n_type
 #[macro_export]
 macro_rules! get_bits {
@@ -46,16 +44,6 @@ impl RFormat {
     }
 }
 
-impl fmt::Display for RFormat {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "invalid R-format instruction: funct3: '{:b}', funct7: '{:b}'",
-            self.funct3, self.funct7
-        )
-    }
-}
-
 pub struct IFormat {
     pub rd: usize,
     pub funct3: usize,
@@ -76,15 +64,6 @@ impl IFormat {
             rs1,
             imm,
         }
-    }
-}
-impl fmt::Display for IFormat {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "invalid I-format instruction: funct3: '{:b}'",
-            self.funct3
-        )
     }
 }
 
@@ -109,15 +88,6 @@ impl SFormat {
             rs2,
             imm,
         }
-    }
-}
-impl fmt::Display for SFormat {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "invalid S-format instruction: funct3: '{:b}'",
-            self.funct3
-        )
     }
 }
 
@@ -151,15 +121,6 @@ impl BFormat {
             rs2,
             imm,
         }
-    }
-}
-impl fmt::Display for BFormat {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "invalid B-format instruction: funct3: '{:b}'",
-            self.funct3
-        )
     }
 }
 
