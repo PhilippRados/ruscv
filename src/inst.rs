@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn store_assigns_byte() {
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
         cpu.write_reg(28, 12);
         // mem[0 + 3] = 12[0:7]
         let inst = Inst::S(
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn lui() {
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         let inst = Inst::U(UInst::LUI, UFormat { rd: 10, imm: 1 });
         inst.execute(&mut cpu);
@@ -295,7 +295,7 @@ mod tests {
 
     #[test]
     fn lui_max() {
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
         let inst = Inst::U(
             UInst::LUI,
             UFormat {
@@ -313,7 +313,7 @@ mod tests {
         // auipc x5, 0x03000
         // jalr x10, x5, -0x400
 
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
         // pc was already incremented by fetch so emulate that.
         cpu.pc = 0x40000004;
         let auipc_inst = Inst::U(

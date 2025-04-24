@@ -49,7 +49,7 @@ case "$operation" in
 
           # capture the emulators stderr messages to check if program finished successfully (exit-code 0)
           stderr=$(./target/release/ruscv "tests/$test_base.bin" 2>&1)
-          if [ "$stderr" != "Emulated program finished at exit syscall with exit-code: 0" ]; then
+          if [[ "$stderr" != *"Emulated program finished at exit syscall with exit-code: 0"* ]]; then
             let "FAILED += 1"
             FAILED_TESTS="${FAILED_TESTS}\n- ${test_base}"
           fi

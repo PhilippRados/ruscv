@@ -22,15 +22,17 @@ pub struct Cpu {
     regs: [u32; 32],
     pub pc: u32,
     pub mem: Memory,
+    print_debug: bool,
 }
 
 impl Cpu {
-    pub fn new() -> Self {
+    pub fn new(print_debug: bool) -> Self {
         let mut regs = [0; 32];
         // initializes stack pointer to top of stack
         regs[2] = MEMSIZE as u32;
 
         Cpu {
+            print_debug,
             regs,
             pc: 0,
             mem: Memory::new(),
@@ -42,9 +44,12 @@ impl Cpu {
 
         for cycle in 0.. {
             if let ProgState::Exit(code) = self.emulate_cycle()? {
+                self.dump_state(cycle);
                 return Ok(code);
             }
-            // self.dump_state(cycle);
+            if self.print_debug {
+                self.dump_state(cycle);
+            }
         }
 
         unreachable!("Emulator should either run out of instructions or exit using syscall")
@@ -214,11 +219,15 @@ impl Cpu {
         if raw_inst == 0 {
             return Err(Error::EndOfInstructions);
         }
-        // eprintln!("{:b}", raw_inst);
+        if self.print_debug {
+            eprintln!("Inst: {:b}", raw_inst);
+        }
+
         let inst = self.decode(raw_inst)?;
         if let Inst::SysCall(SysCall::Exit(code)) = inst {
             return Ok(ProgState::Exit(code));
         }
+
         inst.execute(self);
         Ok(ProgState::Continue)
     }
@@ -289,7 +298,7 @@ mod tests {
     #[test]
     fn x0_hardwired() {
         let program = asm_to_bin("addi x0, x0, -127\n");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
         cpu.load_program(program);
 
         assert!(cpu.emulate_cycle().is_ok());
@@ -299,7 +308,7 @@ mod tests {
     #[test]
     fn negative_assign() {
         let program = asm_to_bin("addi x31, x0, -127\n");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
         cpu.load_program(program);
 
         assert!(cpu.emulate_cycle().is_ok());
@@ -311,7 +320,7 @@ mod tests {
     #[test]
     fn auipc_copy() {
         let program = asm_to_bin("auipc x10, 0\n");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(10), 0);
@@ -320,7 +329,7 @@ mod tests {
     #[test]
     fn auipc_offset() {
         let program = asm_to_bin("addi x11, x0, 12\nauipc x10, 4\n");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(10), 16388);
@@ -329,7 +338,7 @@ mod tests {
     #[test]
     fn arithmetic() {
         let program = file_to_bin("arith.s");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(27) as i32, -26);
@@ -343,7 +352,7 @@ mod tests {
     #[test]
     fn bitops() {
         let program = file_to_bin("bitops.s");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(28) as i32, 1);
@@ -355,7 +364,7 @@ mod tests {
     #[test]
     fn load() {
         let program = file_to_bin("load.s");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(27), 60);
@@ -368,7 +377,7 @@ mod tests {
     #[test]
     fn negative_load_imm() {
         let program = file_to_bin("negative_load.s");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(27), 21);
@@ -380,7 +389,7 @@ mod tests {
     #[test]
     fn negative_store_imm() {
         let program = file_to_bin("negative_store.s");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(22), 261);
@@ -393,7 +402,7 @@ mod tests {
     #[test]
     fn branch_eq() {
         let program = file_to_bin("branch.s");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(20) as i32, -2);
@@ -403,7 +412,7 @@ mod tests {
     #[test]
     fn branch_signed() {
         let program = file_to_bin("signed_branch.s");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(20) as i32, -1);
@@ -412,7 +421,7 @@ mod tests {
     #[test]
     fn branch_unsigned() {
         let program = file_to_bin("unsigned_branch.s");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
         assert_eq!(cpu.read_reg(20), 100);
@@ -422,7 +431,7 @@ mod tests {
     #[test]
     fn fibonacci() {
         let program = file_to_bin("fibs.s");
-        let mut cpu = Cpu::new();
+        let mut cpu = Cpu::new(false);
 
         // fibonacci terminates using exit syscall which is why result is Ok.
         assert!(cpu.run(program).is_ok());
