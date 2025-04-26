@@ -7,7 +7,7 @@ use crate::inst_format::*;
 // Don't want to use too much memory for emulator
 const MEMSIZE: usize = 1024 * 128;
 // Start address of dram section
-const MEM_START: usize = 0x8000_0000;
+const MEM_START: u32 = 0x8000_0000;
 
 pub const INSTSIZE_BYTES: usize = 4;
 
@@ -16,10 +16,62 @@ enum ProgState {
     Exit(u8),
 }
 
-pub struct Memory(pub [u8; MEMSIZE]);
+#[derive(Clone)]
+pub enum Size {
+    Byte = 1,
+    HalfWord = 2,
+    Word = 4,
+}
+impl From<LoadIInst> for Size {
+    fn from(value: LoadIInst) -> Self {
+        match value {
+            LoadIInst::LB | LoadIInst::LBU => Size::Byte,
+            LoadIInst::LH | LoadIInst::LHU => Size::HalfWord,
+            LoadIInst::LW => Size::Word,
+        }
+    }
+}
+
+impl From<SInst> for Size {
+    fn from(value: SInst) -> Self {
+        match value {
+            SInst::SB => Size::Byte,
+            SInst::SH => Size::HalfWord,
+            SInst::SW => Size::Word,
+        }
+    }
+}
+
+macro_rules! read_mem {
+    ($ty:ty,$mem:expr,$from:expr,$to:expr) => {
+        <$ty>::from_le_bytes($mem[$from as usize..$to as usize].try_into().unwrap()) as u32
+    };
+}
+pub struct Memory([u8; MEMSIZE]);
 impl Memory {
     pub fn new() -> Self {
         Memory([0; MEMSIZE])
+    }
+    pub fn read(&self, size: Size, from: u32, is_unsigned: bool) -> u32 {
+        let to = from + size.clone() as u32;
+        match (size, is_unsigned) {
+            (Size::Byte, true) => read_mem!(u8, self.0, from, to),
+            (Size::HalfWord, true) => read_mem!(u16, self.0, from, to),
+            (Size::Byte, false) => read_mem!(i8, self.0, from, to),
+            (Size::HalfWord, false) => read_mem!(i16, self.0, from, to),
+            (Size::Word, _) => read_mem!(u32, self.0, from, to),
+        }
+    }
+    pub fn write(&mut self, size: Size, address: u32, value: u32) {
+        let slice = value.to_le_bytes();
+        let address = address as usize;
+        match size {
+            Size::Byte => self.0[address..address + size as usize].copy_from_slice(&slice[0..1]),
+            Size::HalfWord => {
+                self.0[address..address + size as usize].copy_from_slice(&slice[0..2])
+            }
+            Size::Word => self.0[address..address + size as usize].copy_from_slice(&slice[0..4]),
+        }
     }
 }
 
@@ -56,10 +108,12 @@ impl ProgramCounter {
     pub fn set(&mut self, address: u32) {
         self.0 = address
     }
-    pub fn inc(&mut self) -> Result<usize, Error> {
-        let pc = self.0 as usize;
+    // Increments the program counter and returns the pc before it was incremented.
+    // Basically a poor mans i++;
+    pub fn inc(&mut self) -> Result<u32, Error> {
+        let pc = self.0;
         self.0 += INSTSIZE_BYTES as u32;
-        if pc > MEMSIZE - INSTSIZE_BYTES {
+        if pc > MEMSIZE as u32 - INSTSIZE_BYTES as u32 {
             return Err(Error::InvalidPC(pc, MEMSIZE));
         }
         Ok(pc)
@@ -123,11 +177,7 @@ impl Cpu {
     // fetches a 32 bit instruction from memory
     fn fetch(&mut self) -> Result<u32, Error> {
         let pc = self.pc.inc()?;
-
-        // return instruction in little-endian
-        Ok(u32::from_le_bytes(
-            self.mem.0[pc..pc + INSTSIZE_BYTES].try_into().unwrap(),
-        ))
+        Ok(self.mem.read(Size::Word, pc, true))
     }
 
     // parses raw byte instruction into correct format
@@ -175,11 +225,11 @@ impl Cpu {
             0b0000011 => {
                 let i_format = IFormat::new(raw_inst);
                 let inst = match i_format.funct3 {
-                    0x0 => MemIInst::LB,
-                    0x1 => MemIInst::LH,
-                    0x2 => MemIInst::LW,
-                    0x4 => MemIInst::LBU,
-                    0x5 => MemIInst::LHU,
+                    0x0 => LoadIInst::LB,
+                    0x1 => LoadIInst::LH,
+                    0x2 => LoadIInst::LW,
+                    0x4 => LoadIInst::LBU,
+                    0x5 => LoadIInst::LHU,
                     _ => return Err(Error::InvalidInstFormat(FormatError::I(i_format))),
                 };
 

@@ -89,43 +89,31 @@ pub enum ArithIInst {
     SLTIU,
 }
 
-pub enum MemIInst {
+pub enum LoadIInst {
     LB,
     LH,
     LW,
     LBU,
     LHU,
 }
-macro_rules! load_mem {
-    ($ty:ty,$mem:expr,$from:expr,$to:expr) => {
-        <$ty>::from_le_bytes($mem[$from as usize..$to as usize].try_into().unwrap()) as u32
-    };
+impl LoadIInst {
+    fn is_unsigned(&self) -> bool {
+        matches!(self, LoadIInst::LBU | LoadIInst::LHU)
+    }
 }
-impl MemIInst {
+impl LoadIInst {
     fn op(self, mem: &Memory) -> impl FnOnce(u32, u32) -> u32 + '_ {
-        let size_bytes = match &self {
-            MemIInst::LB | MemIInst::LBU => 1,
-            MemIInst::LH | MemIInst::LHU => 2,
-            MemIInst::LW => 4,
-        };
-        let mem = &mem.0;
         move |rs1, imm| {
             let from = u32::wrapping_add(rs1, imm);
-            let to = u32::wrapping_add(from, size_bytes);
-            match self {
-                MemIInst::LBU => load_mem!(u8, mem, from, to),
-                MemIInst::LHU => load_mem!(u16, mem, from, to),
-                MemIInst::LW => load_mem!(u32, mem, from, to),
-                MemIInst::LB => load_mem!(i8, mem, from, to),
-                MemIInst::LH => load_mem!(i16, mem, from, to),
-            }
+            let is_unsigned = self.is_unsigned();
+            mem.read(Size::from(self), from, is_unsigned)
         }
     }
 }
 
 pub enum IInst {
     Arith(ArithIInst),
-    Mem(MemIInst),
+    Mem(LoadIInst),
     Jalr,
 }
 impl IInst {
@@ -151,19 +139,9 @@ pub enum SInst {
 
 impl SInst {
     fn op(self, mem: &mut Memory) -> impl FnOnce(u32, u32, u32) + '_ {
-        let size_bytes: usize = match &self {
-            SInst::SB => 1,
-            SInst::SH => 2,
-            SInst::SW => 4,
-        };
-
         move |rs1, rs2, imm| {
-            let base = u32::wrapping_add(rs1, imm);
-            for i in 0..size_bytes {
-                let address = u32::wrapping_add(base, i as u32);
-                let bit_offset = i * 8;
-                mem.0[address as usize] = get_bits!(rs2, bit_offset, bit_offset + 7) as u8;
-            }
+            let address = u32::wrapping_add(rs1, imm);
+            mem.write(Size::from(self), address, rs2)
         }
     }
 }
@@ -264,7 +242,7 @@ mod tests {
             },
         );
         inst.execute(&mut cpu);
-        assert_eq!(cpu.mem.0[3], 12);
+        assert_eq!(cpu.mem.read(Size::Byte, 3, true), 12);
     }
 
     #[test]
@@ -313,7 +291,7 @@ mod tests {
             },
         );
         auipc_inst.execute(&mut cpu);
-        assert_eq!(cpu.regs.read(5), 0x43000000);
+        assert_eq!(cpu.regs.read(5), 0x83000000);
 
         // manually increment pc since no fetch phase
         cpu.pc.inc().expect("MEMSIZE bigger than pc");
@@ -328,7 +306,7 @@ mod tests {
             },
         );
         jalr_inst.execute(&mut cpu);
-        assert_eq!(cpu.regs.read(10), 0x40000008);
-        assert_eq!(cpu.pc.get(), 0x42fffc00);
+        assert_eq!(cpu.regs.read(10), 0x80000008);
+        assert_eq!(cpu.pc.get(), 0x82fffc00);
     }
 }

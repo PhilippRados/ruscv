@@ -5,7 +5,7 @@ use crate::inst_format::{BFormat, IFormat, RFormat, SFormat};
 pub enum Error {
     InvalidOpcode(usize),
     InvalidInstFormat(FormatError),
-    InvalidPC(usize, usize),
+    InvalidPC(u32, usize),
     EndOfInstructions,
 }
 pub enum FormatError {
