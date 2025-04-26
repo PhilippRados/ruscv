@@ -52,6 +52,7 @@ fn read_bin(path: &str) -> Vec<u8> {
 
 fn main() -> Result<(), Error> {
     let cli_args = CliArgs::parse();
+
     let program = read_bin(&cli_args.filename);
     Cpu::new(cli_args.print_debug)
         .run(program)

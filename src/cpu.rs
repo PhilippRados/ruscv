@@ -4,7 +4,11 @@ use crate::get_bits;
 use crate::inst::*;
 use crate::inst_format::*;
 
+// Don't want to use too much memory for emulator
 const MEMSIZE: usize = 1024 * 128;
+// Start address of dram section
+const MEM_START: usize = 0x8000_0000;
+
 pub const INSTSIZE_BYTES: usize = 4;
 
 enum ProgState {
@@ -44,9 +48,26 @@ impl Registers {
         self.0[reg_idx] = value;
     }
 }
+pub struct ProgramCounter(u32);
+impl ProgramCounter {
+    pub fn get(&self) -> u32 {
+        self.0
+    }
+    pub fn set(&mut self, address: u32) {
+        self.0 = address
+    }
+    pub fn inc(&mut self) -> Result<usize, Error> {
+        let pc = self.0 as usize;
+        self.0 += INSTSIZE_BYTES as u32;
+        if pc > MEMSIZE - INSTSIZE_BYTES {
+            return Err(Error::InvalidPC(pc, MEMSIZE));
+        }
+        Ok(pc)
+    }
+}
 
 pub struct Cpu {
-    pub pc: u32,
+    pub pc: ProgramCounter,
     pub regs: Registers,
     pub mem: Memory,
     print_debug: bool,
@@ -56,9 +77,7 @@ impl Cpu {
     pub fn new(print_debug: bool) -> Self {
         Cpu {
             print_debug,
-            // TODO: Could be smarter about finding _start.
-            // Also RISC-V machines typically start at address 0x8000_0000 and not 0x0.
-            pc: 0,
+            pc: ProgramCounter(0),
             regs: Registers::new(),
             mem: Memory::new(),
         }
@@ -89,7 +108,7 @@ impl Cpu {
 
     fn dump_state(&self, cycle_count: usize) {
         eprintln!("CPU dump at cycle {cycle_count}:");
-        eprintln!("PC: {}", self.pc);
+        eprintln!("PC: {}", self.pc.get());
         for i in 0..32 {
             eprintln!("R{i}: {}", self.regs.read(i) as i32);
         }
@@ -103,11 +122,7 @@ impl Cpu {
 
     // fetches a 32 bit instruction from memory
     fn fetch(&mut self) -> Result<u32, Error> {
-        let pc = self.pc as usize;
-        self.pc += INSTSIZE_BYTES as u32;
-        if pc > MEMSIZE - INSTSIZE_BYTES {
-            return Err(Error::InvalidPC(pc, MEMSIZE));
-        }
+        let pc = self.pc.inc()?;
 
         // return instruction in little-endian
         Ok(u32::from_le_bytes(
@@ -361,7 +376,7 @@ mod tests {
         assert_eq!(cpu.regs.read(29), 5);
         assert_eq!(cpu.regs.read(30) as i32, -32);
         assert_eq!(cpu.regs.read(31) as i32, 42);
-        assert_eq!(cpu.pc, 28);
+        assert_eq!(cpu.pc.get(), 28);
     }
 
     #[test]
@@ -374,7 +389,7 @@ mod tests {
         assert_eq!(cpu.regs.read(29), 5);
         assert_eq!(cpu.regs.read(30) as i32, -123);
         assert_eq!(cpu.regs.read(31), 0);
-        assert_eq!(cpu.pc, 24);
+        assert_eq!(cpu.pc.get(), 24);
     }
     #[test]
     fn load() {

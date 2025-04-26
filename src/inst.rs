@@ -135,8 +135,8 @@ impl IInst {
             IInst::Arith(inst) => Box::new(RInst::from(inst).op()),
             IInst::Mem(inst) => Box::new(inst.op(&cpu.mem)),
             IInst::Jalr => Box::new(|rs1, imm| {
-                let original_pc = cpu.pc;
-                cpu.pc = u32::wrapping_add(rs1, imm);
+                let original_pc = cpu.pc.get();
+                cpu.pc.set(u32::wrapping_add(rs1, imm));
                 original_pc
             }),
         }
@@ -222,19 +222,21 @@ impl Inst {
                     BInst::BGEU => rs1 >= rs2,
                 };
                 if branch {
-                    cpu.pc = u32::wrapping_add(
-                        cpu.pc,
+                    cpu.pc.set(u32::wrapping_add(
+                        cpu.pc.get(),
                         u32::wrapping_sub(format.imm, INSTSIZE_BYTES as u32),
-                    );
+                    ));
                 }
             }
             Inst::J(format) => {
-                cpu.regs.write(format.rd, cpu.pc);
-                cpu.pc =
-                    u32::wrapping_add(cpu.pc, u32::wrapping_sub(format.imm, INSTSIZE_BYTES as u32));
+                cpu.regs.write(format.rd, cpu.pc.get());
+                cpu.pc.set(u32::wrapping_add(
+                    cpu.pc.get(),
+                    u32::wrapping_sub(format.imm, INSTSIZE_BYTES as u32),
+                ));
             }
             Inst::U(inst, format) => {
-                let alu = inst.op(cpu.pc);
+                let alu = inst.op(cpu.pc.get());
                 let result = alu(format.imm);
                 cpu.regs.write(format.rd, result);
             }
@@ -303,8 +305,6 @@ mod tests {
         // jalr x10, x5, -0x400
 
         let mut cpu = Cpu::new(false);
-        // pc was already incremented by fetch so emulate that.
-        cpu.pc = 0x40000004;
         let auipc_inst = Inst::U(
             UInst::AUIPC,
             UFormat {
@@ -316,7 +316,7 @@ mod tests {
         assert_eq!(cpu.regs.read(5), 0x43000000);
 
         // manually increment pc since no fetch phase
-        cpu.pc += 4;
+        cpu.pc.inc().expect("MEMSIZE bigger than pc");
 
         let jalr_inst = Inst::I(
             IInst::Jalr,
@@ -329,6 +329,6 @@ mod tests {
         );
         jalr_inst.execute(&mut cpu);
         assert_eq!(cpu.regs.read(10), 0x40000008);
-        assert_eq!(cpu.pc, 0x42fffc00);
+        assert_eq!(cpu.pc.get(), 0x42fffc00);
     }
 }
