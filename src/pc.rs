@@ -1,5 +1,5 @@
-use crate::cpu::*;
 use crate::error::*;
+use crate::memory::*;
 
 pub struct ProgramCounter(u32);
 impl ProgramCounter {
@@ -16,8 +16,8 @@ impl ProgramCounter {
     // Basically a poor mans i++;
     pub fn inc(&mut self) -> Result<u32, Error> {
         let pc = self.0;
-        self.0 += INSTSIZE_BYTES as u32;
-        if pc > MEMSIZE as u32 - INSTSIZE_BYTES as u32 {
+        self.0 += 4;
+        if pc > MEMSIZE as u32 - 4 {
             return Err(Error::InvalidPC(pc, MEMSIZE));
         }
         Ok(pc)

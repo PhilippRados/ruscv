@@ -1,5 +1,9 @@
-use crate::cpu::*;
 use crate::inst::*;
+
+// Don't want to use too much memory for emulator
+pub const MEMSIZE: usize = 1024 * 128;
+// Start address of dram section
+// pub const MEM_START: u32 = 0x8000_0000;
 
 #[derive(Clone)]
 pub enum Size {

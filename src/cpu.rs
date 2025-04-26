@@ -6,13 +6,6 @@ use crate::memory::*;
 use crate::pc::*;
 use crate::regs::*;
 
-// Don't want to use too much memory for emulator
-pub const MEMSIZE: usize = 1024 * 128;
-// Start address of dram section
-const MEM_START: u32 = 0x8000_0000;
-
-pub const INSTSIZE_BYTES: usize = 4;
-
 enum ProgState {
     Continue,
     Exit(u8),

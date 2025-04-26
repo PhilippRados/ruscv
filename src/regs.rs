@@ -1,4 +1,4 @@
-use crate::cpu::*;
+use crate::memory::*;
 
 pub struct Registers([u32; 32]);
 impl Registers {

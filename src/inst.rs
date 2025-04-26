@@ -203,7 +203,7 @@ impl Inst {
                 if branch {
                     cpu.pc.set(u32::wrapping_add(
                         cpu.pc.get(),
-                        u32::wrapping_sub(format.imm, INSTSIZE_BYTES as u32),
+                        u32::wrapping_sub(format.imm, 4),
                     ));
                 }
             }
@@ -211,7 +211,7 @@ impl Inst {
                 cpu.regs.write(format.rd, cpu.pc.get());
                 cpu.pc.set(u32::wrapping_add(
                     cpu.pc.get(),
-                    u32::wrapping_sub(format.imm, INSTSIZE_BYTES as u32),
+                    u32::wrapping_sub(format.imm, 4),
                 ));
             }
             Inst::U(inst, format) => {
@@ -284,6 +284,7 @@ mod tests {
         // jalr x10, x5, -0x400
 
         let mut cpu = Cpu::new(false);
+        cpu.pc.set(0x40000004);
         let auipc_inst = Inst::U(
             UInst::AUIPC,
             UFormat {
@@ -292,10 +293,10 @@ mod tests {
             },
         );
         auipc_inst.execute(&mut cpu);
-        assert_eq!(cpu.regs.read(5), 0x83000000);
+        assert_eq!(cpu.regs.read(5), 0x43000000);
 
         // manually increment pc since no fetch phase
-        cpu.pc.inc().expect("MEMSIZE bigger than pc");
+        cpu.pc.set(cpu.pc.get() + 4);
 
         let jalr_inst = Inst::I(
             IInst::Jalr,
@@ -307,7 +308,7 @@ mod tests {
             },
         );
         jalr_inst.execute(&mut cpu);
-        assert_eq!(cpu.regs.read(10), 0x80000008);
-        assert_eq!(cpu.pc.get(), 0x82fffc00);
+        assert_eq!(cpu.regs.read(10), 0x40000008);
+        assert_eq!(cpu.pc.get(), 0x42fffc00);
     }
 }
