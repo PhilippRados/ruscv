@@ -2,6 +2,9 @@ mod cpu;
 mod error;
 mod inst;
 mod inst_format;
+mod memory;
+mod pc;
+mod regs;
 
 use cpu::Cpu;
 use error::Error;

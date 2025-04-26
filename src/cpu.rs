@@ -1,11 +1,13 @@
-use crate::error::Error;
-use crate::error::FormatError;
+use crate::error::*;
 use crate::get_bits;
 use crate::inst::*;
 use crate::inst_format::*;
+use crate::memory::*;
+use crate::pc::*;
+use crate::regs::*;
 
 // Don't want to use too much memory for emulator
-const MEMSIZE: usize = 1024 * 128;
+pub const MEMSIZE: usize = 1024 * 128;
 // Start address of dram section
 const MEM_START: u32 = 0x8000_0000;
 
@@ -14,110 +16,6 @@ pub const INSTSIZE_BYTES: usize = 4;
 enum ProgState {
     Continue,
     Exit(u8),
-}
-
-#[derive(Clone)]
-pub enum Size {
-    Byte = 1,
-    HalfWord = 2,
-    Word = 4,
-}
-impl From<LoadIInst> for Size {
-    fn from(value: LoadIInst) -> Self {
-        match value {
-            LoadIInst::LB | LoadIInst::LBU => Size::Byte,
-            LoadIInst::LH | LoadIInst::LHU => Size::HalfWord,
-            LoadIInst::LW => Size::Word,
-        }
-    }
-}
-
-impl From<SInst> for Size {
-    fn from(value: SInst) -> Self {
-        match value {
-            SInst::SB => Size::Byte,
-            SInst::SH => Size::HalfWord,
-            SInst::SW => Size::Word,
-        }
-    }
-}
-
-macro_rules! read_mem {
-    ($ty:ty,$mem:expr,$from:expr,$to:expr) => {
-        <$ty>::from_le_bytes($mem[$from as usize..$to as usize].try_into().unwrap()) as u32
-    };
-}
-pub struct Memory([u8; MEMSIZE]);
-impl Memory {
-    pub fn new() -> Self {
-        Memory([0; MEMSIZE])
-    }
-    pub fn read(&self, size: Size, from: u32, is_unsigned: bool) -> u32 {
-        let to = from + size.clone() as u32;
-        match (size, is_unsigned) {
-            (Size::Byte, true) => read_mem!(u8, self.0, from, to),
-            (Size::HalfWord, true) => read_mem!(u16, self.0, from, to),
-            (Size::Byte, false) => read_mem!(i8, self.0, from, to),
-            (Size::HalfWord, false) => read_mem!(i16, self.0, from, to),
-            (Size::Word, _) => read_mem!(u32, self.0, from, to),
-        }
-    }
-    pub fn write(&mut self, size: Size, address: u32, value: u32) {
-        let slice = value.to_le_bytes();
-        let address = address as usize;
-        match size {
-            Size::Byte => self.0[address..address + size as usize].copy_from_slice(&slice[0..1]),
-            Size::HalfWord => {
-                self.0[address..address + size as usize].copy_from_slice(&slice[0..2])
-            }
-            Size::Word => self.0[address..address + size as usize].copy_from_slice(&slice[0..4]),
-        }
-    }
-}
-
-pub struct Registers([u32; 32]);
-impl Registers {
-    pub fn new() -> Self {
-        let mut regs = Registers([0; 32]);
-        // initializes stack pointer to top of stack
-        regs.0[2] = MEMSIZE as u32;
-        regs
-    }
-    pub fn read(&self, reg_idx: usize) -> u32 {
-        assert!(reg_idx < 32, "rv32i only has 32 registers");
-        if reg_idx == 0 {
-            0
-        } else {
-            self.0[reg_idx]
-        }
-    }
-    pub fn write(&mut self, reg_idx: usize, value: u32) {
-        assert!(reg_idx < 32, "rv32i only has 32 registers");
-        if reg_idx == 0 {
-            return;
-        }
-
-        self.0[reg_idx] = value;
-    }
-}
-pub struct ProgramCounter(u32);
-impl ProgramCounter {
-    pub fn get(&self) -> u32 {
-        self.0
-    }
-    pub fn set(&mut self, address: u32) {
-        self.0 = address
-    }
-    // Increments the program counter and returns the pc before it was incremented.
-    // Basically a poor mans i++;
-    pub fn inc(&mut self) -> Result<u32, Error> {
-        let pc = self.0;
-        self.0 += INSTSIZE_BYTES as u32;
-        if pc > MEMSIZE as u32 - INSTSIZE_BYTES as u32 {
-            return Err(Error::InvalidPC(pc, MEMSIZE));
-        }
-        Ok(pc)
-    }
 }
 
 pub struct Cpu {
@@ -131,14 +29,14 @@ impl Cpu {
     pub fn new(print_debug: bool) -> Self {
         Cpu {
             print_debug,
-            pc: ProgramCounter(0),
+            pc: ProgramCounter::new(),
             regs: Registers::new(),
             mem: Memory::new(),
         }
     }
 
     pub fn run(&mut self, program: Vec<u8>) -> Result<u8, Error> {
-        self.load_program(program);
+        self.mem.load_program(program);
 
         for cycle in 0.. {
             match self.emulate_cycle() {
@@ -168,13 +66,7 @@ impl Cpu {
         }
     }
 
-    // loads program to start of the memory
-    fn load_program(&mut self, mut program: Vec<u8>) {
-        program.resize_with(MEMSIZE, || 0);
-        self.mem.0 = program.as_slice().try_into().unwrap()
-    }
-
-    // fetches a 32 bit instruction from memory
+    // fetches next instruction from memory
     fn fetch(&mut self) -> Result<u32, Error> {
         let pc = self.pc.inc()?;
         Ok(self.mem.read(Size::Word, pc, true))
@@ -379,7 +271,7 @@ mod tests {
     fn x0_hardwired() {
         let program = asm_to_bin("addi x0, x0, -127\n");
         let mut cpu = Cpu::new(false);
-        cpu.load_program(program);
+        cpu.mem.load_program(program);
 
         assert!(cpu.emulate_cycle().is_ok());
         assert_eq!(0, cpu.regs.read(0));
@@ -389,7 +281,7 @@ mod tests {
     fn negative_assign() {
         let program = asm_to_bin("addi x31, x0, -127\n");
         let mut cpu = Cpu::new(false);
-        cpu.load_program(program);
+        cpu.mem.load_program(program);
 
         assert!(cpu.emulate_cycle().is_ok());
         let n = -127;
@@ -451,7 +343,7 @@ mod tests {
         assert_eq!(cpu.regs.read(30), 60);
         assert_eq!(cpu.regs.read(29), 60);
         assert_eq!(cpu.regs.read(28), 60);
-        assert_eq!(cpu.mem.0[64], 60);
+        assert_eq!(cpu.mem.read(Size::Byte, 64, true), 60);
     }
 
     #[test]
@@ -463,7 +355,7 @@ mod tests {
         assert_eq!(cpu.regs.read(27), 21);
         assert_eq!(cpu.regs.read(28), 60);
         assert_eq!(cpu.regs.read(30), 60);
-        assert_eq!(cpu.mem.0[20], 60);
+        assert_eq!(cpu.mem.read(Size::Byte, 20, true), 60);
     }
 
     #[test]
@@ -476,7 +368,7 @@ mod tests {
         assert_eq!(cpu.regs.read(27), 256);
         assert_eq!(cpu.regs.read(28), 60);
         assert_eq!(cpu.regs.read(30), 60);
-        assert_eq!(cpu.mem.0[256], 60);
+        assert_eq!(cpu.mem.read(Size::Byte, 256, true), 60);
     }
 
     #[test]

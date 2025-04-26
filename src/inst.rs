@@ -1,6 +1,7 @@
 use crate::cpu::*;
 use crate::get_bits;
 use crate::inst_format::*;
+use crate::memory::*;
 
 use std::ops::BitAnd;
 use std::ops::BitOr;
