@@ -19,23 +19,47 @@ impl Memory {
     }
 }
 
+pub struct Registers([u32; 32]);
+impl Registers {
+    pub fn new() -> Self {
+        let mut regs = Registers([0; 32]);
+        // initializes stack pointer to top of stack
+        regs.0[2] = MEMSIZE as u32;
+        regs
+    }
+    pub fn read(&self, reg_idx: usize) -> u32 {
+        assert!(reg_idx < 32, "rv32i only has 32 registers");
+        if reg_idx == 0 {
+            0
+        } else {
+            self.0[reg_idx]
+        }
+    }
+    pub fn write(&mut self, reg_idx: usize, value: u32) {
+        assert!(reg_idx < 32, "rv32i only has 32 registers");
+        if reg_idx == 0 {
+            return;
+        }
+
+        self.0[reg_idx] = value;
+    }
+}
+
 pub struct Cpu {
-    regs: [u32; 32],
     pub pc: u32,
+    pub regs: Registers,
     pub mem: Memory,
     print_debug: bool,
 }
 
 impl Cpu {
     pub fn new(print_debug: bool) -> Self {
-        let mut regs = [0; 32];
-        // initializes stack pointer to top of stack
-        regs[2] = MEMSIZE as u32;
-
         Cpu {
             print_debug,
-            regs,
+            // TODO: Could be smarter about finding _start.
+            // Also RISC-V machines typically start at address 0x8000_0000 and not 0x0.
             pc: 0,
+            regs: Registers::new(),
             mem: Memory::new(),
         }
     }
@@ -63,28 +87,11 @@ impl Cpu {
         unreachable!("Emulator should either run out of instructions or exit using syscall")
     }
 
-    pub fn read_reg(&self, reg_idx: usize) -> u32 {
-        assert!(reg_idx < 32, "rv32i only has 32 registers");
-        if reg_idx == 0 {
-            return 0;
-        }
-
-        self.regs[reg_idx]
-    }
-    pub fn write_reg(&mut self, reg_idx: usize, value: u32) {
-        assert!(reg_idx < 32, "rv32i only has 32 registers");
-        if reg_idx == 0 {
-            return;
-        }
-
-        self.regs[reg_idx] = value;
-    }
-
     fn dump_state(&self, cycle_count: usize) {
         eprintln!("CPU dump at cycle {cycle_count}:");
         eprintln!("PC: {}", self.pc);
         for i in 0..32 {
-            eprintln!("R{i}: {}", self.regs[i] as i32);
+            eprintln!("R{i}: {}", self.regs.read(i) as i32);
         }
     }
 
@@ -204,9 +211,9 @@ impl Cpu {
             0b0010111 => Inst::U(UInst::AUIPC, UFormat::new(raw_inst)),
             0b1110011 => {
                 // ecall
-                let call = if self.regs[17] == 93 {
+                let call = if self.regs.read(17) == 93 {
                     // intercept exit syscall (a7 == 93) to check official risc-v testsuite
-                    SysCall::Exit(self.regs[10] as u8)
+                    SysCall::Exit(self.regs.read(10) as u8)
                 } else {
                     SysCall::Nop
                 };
@@ -310,7 +317,7 @@ mod tests {
         cpu.load_program(program);
 
         assert!(cpu.emulate_cycle().is_ok());
-        assert_eq!(0, cpu.read_reg(0));
+        assert_eq!(0, cpu.regs.read(0));
     }
 
     #[test]
@@ -321,8 +328,8 @@ mod tests {
 
         assert!(cpu.emulate_cycle().is_ok());
         let n = -127;
-        assert_eq!(n as u32, cpu.read_reg(31));
-        assert_eq!(0, cpu.read_reg(0));
+        assert_eq!(n as u32, cpu.regs.read(31));
+        assert_eq!(0, cpu.regs.read(0));
     }
 
     #[test]
@@ -331,7 +338,7 @@ mod tests {
         let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
-        assert_eq!(cpu.read_reg(10), 0);
+        assert_eq!(cpu.regs.read(10), 0);
     }
 
     #[test]
@@ -340,7 +347,7 @@ mod tests {
         let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
-        assert_eq!(cpu.read_reg(10), 16388);
+        assert_eq!(cpu.regs.read(10), 16388);
     }
 
     #[test]
@@ -349,11 +356,11 @@ mod tests {
         let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
-        assert_eq!(cpu.read_reg(27) as i32, -26);
-        assert_eq!(cpu.read_reg(28) as i32, -6);
-        assert_eq!(cpu.read_reg(29), 5);
-        assert_eq!(cpu.read_reg(30) as i32, -32);
-        assert_eq!(cpu.read_reg(31) as i32, 42);
+        assert_eq!(cpu.regs.read(27) as i32, -26);
+        assert_eq!(cpu.regs.read(28) as i32, -6);
+        assert_eq!(cpu.regs.read(29), 5);
+        assert_eq!(cpu.regs.read(30) as i32, -32);
+        assert_eq!(cpu.regs.read(31) as i32, 42);
         assert_eq!(cpu.pc, 28);
     }
 
@@ -363,10 +370,10 @@ mod tests {
         let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
-        assert_eq!(cpu.read_reg(28) as i32, 1);
-        assert_eq!(cpu.read_reg(29), 5);
-        assert_eq!(cpu.read_reg(30) as i32, -123);
-        assert_eq!(cpu.read_reg(31), 0);
+        assert_eq!(cpu.regs.read(28) as i32, 1);
+        assert_eq!(cpu.regs.read(29), 5);
+        assert_eq!(cpu.regs.read(30) as i32, -123);
+        assert_eq!(cpu.regs.read(31), 0);
         assert_eq!(cpu.pc, 24);
     }
     #[test]
@@ -375,10 +382,10 @@ mod tests {
         let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
-        assert_eq!(cpu.read_reg(27), 60);
-        assert_eq!(cpu.read_reg(30), 60);
-        assert_eq!(cpu.read_reg(29), 60);
-        assert_eq!(cpu.read_reg(28), 60);
+        assert_eq!(cpu.regs.read(27), 60);
+        assert_eq!(cpu.regs.read(30), 60);
+        assert_eq!(cpu.regs.read(29), 60);
+        assert_eq!(cpu.regs.read(28), 60);
         assert_eq!(cpu.mem.0[64], 60);
     }
 
@@ -388,9 +395,9 @@ mod tests {
         let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
-        assert_eq!(cpu.read_reg(27), 21);
-        assert_eq!(cpu.read_reg(28), 60);
-        assert_eq!(cpu.read_reg(30), 60);
+        assert_eq!(cpu.regs.read(27), 21);
+        assert_eq!(cpu.regs.read(28), 60);
+        assert_eq!(cpu.regs.read(30), 60);
         assert_eq!(cpu.mem.0[20], 60);
     }
 
@@ -400,10 +407,10 @@ mod tests {
         let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
-        assert_eq!(cpu.read_reg(22), 261);
-        assert_eq!(cpu.read_reg(27), 256);
-        assert_eq!(cpu.read_reg(28), 60);
-        assert_eq!(cpu.read_reg(30), 60);
+        assert_eq!(cpu.regs.read(22), 261);
+        assert_eq!(cpu.regs.read(27), 256);
+        assert_eq!(cpu.regs.read(28), 60);
+        assert_eq!(cpu.regs.read(30), 60);
         assert_eq!(cpu.mem.0[256], 60);
     }
 
@@ -413,8 +420,8 @@ mod tests {
         let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
-        assert_eq!(cpu.read_reg(20) as i32, -2);
-        assert_eq!(cpu.read_reg(21), 1);
+        assert_eq!(cpu.regs.read(20) as i32, -2);
+        assert_eq!(cpu.regs.read(21), 1);
     }
 
     #[test]
@@ -423,8 +430,8 @@ mod tests {
         let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
-        assert_eq!(cpu.read_reg(20) as i32, -1);
-        assert_eq!(cpu.read_reg(21), 1);
+        assert_eq!(cpu.regs.read(20) as i32, -1);
+        assert_eq!(cpu.regs.read(21), 1);
     }
     #[test]
     fn branch_unsigned() {
@@ -432,8 +439,8 @@ mod tests {
         let mut cpu = Cpu::new(false);
 
         assert!(matches!(cpu.run(program), Err(Error::EndOfInstructions)));
-        assert_eq!(cpu.read_reg(20), 100);
-        assert_eq!(cpu.read_reg(21), 100);
+        assert_eq!(cpu.regs.read(20), 100);
+        assert_eq!(cpu.regs.read(21), 100);
     }
 
     #[test]
@@ -444,6 +451,6 @@ mod tests {
         // fibonacci terminates using exit syscall which is why result is Ok.
         assert!(cpu.run(program).is_ok());
         //  fibs(10) == a0 == r10 == 55
-        assert_eq!(cpu.read_reg(10), 55);
+        assert_eq!(cpu.regs.read(10), 55);
     }
 }

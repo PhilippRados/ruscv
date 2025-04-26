@@ -195,24 +195,24 @@ impl Inst {
         match self {
             Inst::R(inst, format) => {
                 let alu = inst.op();
-                let result = alu(cpu.read_reg(format.rs1), cpu.read_reg(format.rs2));
-                cpu.write_reg(format.rd, result);
+                let result = alu(cpu.regs.read(format.rs1), cpu.regs.read(format.rs2));
+                cpu.regs.write(format.rd, result);
             }
             Inst::I(inst, format) => {
-                let rs1 = cpu.read_reg(format.rs1);
+                let rs1 = cpu.regs.read(format.rs1);
                 let alu = inst.op(cpu);
                 let result = alu(rs1, format.imm);
-                cpu.write_reg(format.rd, result);
+                cpu.regs.write(format.rd, result);
             }
             Inst::S(inst, format) => {
-                let rs1 = cpu.read_reg(format.rs1);
-                let rs2 = cpu.read_reg(format.rs2);
+                let rs1 = cpu.regs.read(format.rs1);
+                let rs2 = cpu.regs.read(format.rs2);
                 let alu = inst.op(&mut cpu.mem);
                 alu(rs1, rs2, format.imm);
             }
             Inst::B(inst, format) => {
-                let rs1 = cpu.read_reg(format.rs1);
-                let rs2 = cpu.read_reg(format.rs2);
+                let rs1 = cpu.regs.read(format.rs1);
+                let rs2 = cpu.regs.read(format.rs2);
                 let branch = match inst {
                     BInst::BEQ => rs1 == rs2,
                     BInst::BNE => rs1 != rs2,
@@ -229,14 +229,14 @@ impl Inst {
                 }
             }
             Inst::J(format) => {
-                cpu.write_reg(format.rd, cpu.pc);
+                cpu.regs.write(format.rd, cpu.pc);
                 cpu.pc =
                     u32::wrapping_add(cpu.pc, u32::wrapping_sub(format.imm, INSTSIZE_BYTES as u32));
             }
             Inst::U(inst, format) => {
                 let alu = inst.op(cpu.pc);
                 let result = alu(format.imm);
-                cpu.write_reg(format.rd, result);
+                cpu.regs.write(format.rd, result);
             }
             Inst::SysCall(..) => {}
         }
@@ -250,7 +250,7 @@ mod tests {
     #[test]
     fn store_assigns_byte() {
         let mut cpu = Cpu::new(false);
-        cpu.write_reg(28, 12);
+        cpu.regs.write(28, 12);
         // mem[0 + 3] = 12[0:7]
         let inst = Inst::S(
             SInst::SB,
@@ -271,15 +271,15 @@ mod tests {
 
         let inst = Inst::U(UInst::LUI, UFormat { rd: 10, imm: 1 });
         inst.execute(&mut cpu);
-        assert_eq!(cpu.read_reg(10), 4096);
+        assert_eq!(cpu.regs.read(10), 4096);
 
         let inst = Inst::U(UInst::LUI, UFormat { rd: 10, imm: 3 });
         inst.execute(&mut cpu);
-        assert_eq!(cpu.read_reg(10), 12288);
+        assert_eq!(cpu.regs.read(10), 12288);
 
         let inst = Inst::U(UInst::LUI, UFormat { rd: 10, imm: 0x100 });
         inst.execute(&mut cpu);
-        assert_eq!(cpu.read_reg(10), 1048576);
+        assert_eq!(cpu.regs.read(10), 1048576);
     }
 
     #[test]
@@ -293,7 +293,7 @@ mod tests {
             },
         );
         inst.execute(&mut cpu);
-        assert_eq!(cpu.read_reg(10), 0b1111_1111_1111_1111_0000_0000_0000);
+        assert_eq!(cpu.regs.read(10), 0b1111_1111_1111_1111_0000_0000_0000);
     }
 
     #[test]
@@ -313,7 +313,7 @@ mod tests {
             },
         );
         auipc_inst.execute(&mut cpu);
-        assert_eq!(cpu.read_reg(5), 0x43000000);
+        assert_eq!(cpu.regs.read(5), 0x43000000);
 
         // manually increment pc since no fetch phase
         cpu.pc += 4;
@@ -328,7 +328,7 @@ mod tests {
             },
         );
         jalr_inst.execute(&mut cpu);
-        assert_eq!(cpu.read_reg(10), 0x40000008);
+        assert_eq!(cpu.regs.read(10), 0x40000008);
         assert_eq!(cpu.pc, 0x42fffc00);
     }
 }
